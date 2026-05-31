@@ -88,6 +88,14 @@ export default function AdminPage() {
   const [filterService, setFilterService] = useState('all');
   const [dynamicFilters, setDynamicFilters] = useState<Record<string, string>>({});
   const [filterTimeRange, setFilterTimeRange] = useState('24h');
+  const [customStartDate, setCustomStartDate] = useState(() => {
+    const d = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    return new Date(d.getTime() - d.getTimezoneOffset() * 60 * 1000).toISOString().slice(0, 16);
+  });
+  const [customEndDate, setCustomEndDate] = useState(() => {
+    const d = new Date();
+    return new Date(d.getTime() - d.getTimezoneOffset() * 60 * 1000).toISOString().slice(0, 16);
+  });
   const [chartType, setChartType] = useState<'bar' | 'line' | 'area'>('bar');
 
   // --- SERVICE CRUD STATE ---
@@ -114,8 +122,24 @@ export default function AdminPage() {
   const [labelWarning, setLabelWarning] = useState<string>('Instabilidade');
   const [labelCritical, setLabelCritical] = useState<string>('Queda total');
   const [isSavingThresholds, setIsSavingThresholds] = useState(false);
-  const [settingsSubTab, setSettingsSubTab] = useState<'cards' | 'form' | 'rules' | 'logs'>('cards');
+  const [settingsSubTab, setSettingsSubTab] = useState<'cards' | 'form' | 'rules' | 'alerts' | 'logs'>('cards');
   const [actionLogs, setActionLogs] = useState<any[]>([]);
+
+  // --- ALERT MANAGEMENT STATE ---
+  const [networkAlerts, setNetworkAlerts] = useState<any[]>([]);
+  const [displayInterval, setDisplayInterval] = useState<number>(10); // default 10 mins
+  const [autoCloseInterval, setAutoCloseInterval] = useState<number>(60); // default 60 seconds
+  const [isSavingAlertsConfig, setIsSavingAlertsConfig] = useState(false);
+  const [isAlertModalOpen, setIsAlertModalOpen] = useState(false);
+  const [editingAlert, setEditingAlert] = useState<any | null>(null); // null means new alert
+  
+  // Alert form fields
+  const [alertFormTitle, setAlertFormTitle] = useState('');
+  const [alertFormType, setAlertFormType] = useState('Instabilidade Geral');
+  const [alertFormDescription, setAlertFormDescription] = useState('');
+  const [alertFormExpirationType, setAlertFormExpirationType] = useState<'manual' | 'scheduled'>('manual');
+  const [alertFormExpiresAt, setAlertFormExpiresAt] = useState('');
+  const [isSavingAlert, setIsSavingAlert] = useState(false);
 
   useEffect(() => {
     setIsMounted(true);
@@ -196,6 +220,29 @@ export default function AdminPage() {
         setChartWindowHours(thresholds.chartWindowHours || 24);
         setLabelNormal(thresholds.labelNormal || 'Operando');
         setLabelWarning(thresholds.labelWarning || 'Instabilidade');
+      }
+
+      // Fetch network alerts
+      const { data: alertsSettingData } = await supabase
+        .from('settings')
+        .select('*')
+        .eq('key', 'network_alerts')
+        .single();
+
+      if (alertsSettingData) {
+        setNetworkAlerts(alertsSettingData.value || []);
+      }
+
+      // Fetch network alert display config
+      const { data: alertConfigSettingData } = await supabase
+        .from('settings')
+        .select('*')
+        .eq('key', 'network_alert_config')
+        .single();
+
+      if (alertConfigSettingData) {
+        setDisplayInterval(alertConfigSettingData.value?.displayInterval ?? 10);
+        setAutoCloseInterval(alertConfigSettingData.value?.autoCloseInterval ?? 60);
       }
 
       // 5. Fetch Action Logs
@@ -427,6 +474,126 @@ export default function AdminPage() {
     }
   };
 
+  // --- ALERT MANAGEMENT HANDLERS ---
+  const handleSaveAlertConfig = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSavingAlertsConfig(true);
+    try {
+      const { error } = await supabase
+        .from('settings')
+        .upsert({
+          key: 'network_alert_config',
+          value: { displayInterval, autoCloseInterval },
+          updated_at: new Date().toISOString()
+        });
+
+      if (error) throw error;
+      await logAction('Configurar Alertas', `Intervalo: ${displayInterval}m, Auto-fechar: ${autoCloseInterval}s`);
+      toast.success('Configurações de alerta salvas!');
+    } catch (err: any) {
+      toast.error(`Erro ao salvar: ${err.message}`);
+    } finally {
+      setIsSavingAlertsConfig(false);
+    }
+  };
+
+  const handleSaveAlert = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!alertFormTitle.trim() || !alertFormDescription.trim()) {
+      toast.error('Preencha os campos obrigatórios.');
+      return;
+    }
+
+    setIsSavingAlert(true);
+    const newAlert = {
+      id: editingAlert ? editingAlert.id : crypto.randomUUID(),
+      title: alertFormTitle.trim(),
+      alert_type: alertFormType,
+      description: alertFormDescription.trim(),
+      is_active: editingAlert ? editingAlert.is_active : true,
+      expires_at: alertFormExpirationType === 'scheduled' ? new Date(alertFormExpiresAt).toISOString() : null,
+      created_at: editingAlert ? editingAlert.created_at : new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+
+    let updatedAlerts = [];
+    if (editingAlert) {
+      updatedAlerts = networkAlerts.map(a => a.id === editingAlert.id ? newAlert : a);
+    } else {
+      updatedAlerts = [newAlert, ...networkAlerts];
+    }
+
+    try {
+      const { error } = await supabase
+        .from('settings')
+        .upsert({
+          key: 'network_alerts',
+          value: updatedAlerts,
+          updated_at: new Date().toISOString()
+        });
+
+      if (error) throw error;
+      await logAction(
+        editingAlert ? 'Editar Alerta de Rede' : 'Criar Alerta de Rede',
+        `Título: ${newAlert.title}, Tipo: ${newAlert.alert_type}`
+      );
+      toast.success(editingAlert ? 'Alerta atualizado com sucesso!' : 'Novo alerta de rede criado!');
+      setNetworkAlerts(updatedAlerts);
+      setIsAlertModalOpen(false);
+    } catch (err: any) {
+      toast.error(`Erro ao salvar alerta: ${err.message}`);
+    } finally {
+      setIsSavingAlert(false);
+    }
+  };
+
+  const handleToggleAlertActive = async (id: string, currentStatus: boolean) => {
+    const updatedAlerts = networkAlerts.map(a => {
+      if (a.id === id) {
+        return { ...a, is_active: !currentStatus, updated_at: new Date().toISOString() };
+      }
+      return a;
+    });
+
+    try {
+      const { error } = await supabase
+        .from('settings')
+        .upsert({
+          key: 'network_alerts',
+          value: updatedAlerts,
+          updated_at: new Date().toISOString()
+        });
+
+      if (error) throw error;
+      toast.success(currentStatus ? 'Alerta desativado!' : 'Alerta ativado!');
+      setNetworkAlerts(updatedAlerts);
+    } catch (err: any) {
+      toast.error(`Erro ao alterar status: ${err.message}`);
+    }
+  };
+
+  const handleDeleteAlert = async (id: string) => {
+    if (!confirm('Deseja realmente deletar este alerta do histórico?')) return;
+
+    const updatedAlerts = networkAlerts.filter(a => a.id !== id);
+
+    try {
+      const { error } = await supabase
+        .from('settings')
+        .upsert({
+          key: 'network_alerts',
+          value: updatedAlerts,
+          updated_at: new Date().toISOString()
+        });
+
+      if (error) throw error;
+      toast.success('Alerta deletado com sucesso!');
+      setNetworkAlerts(updatedAlerts);
+    } catch (err: any) {
+      toast.error(`Erro ao deletar alerta: ${err.message}`);
+    }
+  };
+
   // --- FILTER & CHART COMPUTATIONS ---
   const filteredReports = useMemo(() => {
     return reports.filter((r) => {
@@ -451,10 +618,14 @@ export default function AdminPage() {
         return now - reportTime <= 7 * 24 * 60 * 60 * 1000;
       } else if (filterTimeRange === '30d') {
         return now - reportTime <= 30 * 24 * 60 * 60 * 1000;
+      } else if (filterTimeRange === 'custom') {
+        const startMs = customStartDate ? new Date(customStartDate).getTime() : 0;
+        const endMs = customEndDate ? new Date(customEndDate).getTime() : Infinity;
+        return reportTime >= startMs && reportTime <= endMs;
       }
       return true; // 'all'
     });
-  }, [reports, filterService, dynamicFilters, filterTimeRange]);
+  }, [reports, filterService, dynamicFilters, filterTimeRange, customStartDate, customEndDate]);
 
   // Bar Chart Data (Reports per Service)
   const barChartData = useMemo(() => {
@@ -516,6 +687,66 @@ export default function AdminPage() {
         label: hour,
         relatos: count,
       }));
+    } else if (filterTimeRange === 'custom') {
+      const startMs = customStartDate ? new Date(customStartDate).getTime() : 0;
+      const endMs = customEndDate ? new Date(customEndDate).getTime() : Date.now();
+      
+      const diffMs = endMs - startMs;
+      const diffHours = diffMs / (60 * 60 * 1000);
+
+      if (diffHours <= 48) {
+        // Group by hour
+        const hourlyData: Record<string, number> = {};
+        const current = new Date(startMs);
+        const end = new Date(endMs);
+        
+        let safetyCounter = 0;
+        while (current <= end && safetyCounter < 100) {
+          const hourStr = `${String(current.getHours()).padStart(2, '0')}:00`;
+          hourlyData[hourStr] = 0;
+          current.setHours(current.getHours() + 1);
+          safetyCounter++;
+        }
+
+        filteredReports.forEach((r) => {
+          const d = new Date(r.created_at);
+          const hourStr = `${String(d.getHours()).padStart(2, '0')}:00`;
+          if (hourlyData[hourStr] !== undefined) {
+            hourlyData[hourStr] += 1;
+          }
+        });
+
+        return Object.entries(hourlyData).map(([hour, count]) => ({
+          label: hour,
+          relatos: count,
+        }));
+      } else {
+        // Group by day
+        const dailyData: Record<string, number> = {};
+        const current = new Date(startMs);
+        const end = new Date(endMs);
+
+        let safetyCounter = 0;
+        while (current <= end && safetyCounter < 100) {
+          const dateStr = `${String(current.getDate()).padStart(2, '0')}/${String(current.getMonth() + 1).padStart(2, '0')}`;
+          dailyData[dateStr] = 0;
+          current.setDate(current.getDate() + 1);
+          safetyCounter++;
+        }
+
+        filteredReports.forEach((r) => {
+          const d = new Date(r.created_at);
+          const dateStr = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
+          if (dailyData[dateStr] !== undefined) {
+            dailyData[dateStr] += 1;
+          }
+        });
+
+        return Object.entries(dailyData).map(([date, count]) => ({
+          label: date,
+          relatos: count,
+        }));
+      }
     } else {
       // Group by day for 7d, 30d, all
       const dailyData: Record<string, number> = {};
@@ -545,7 +776,7 @@ export default function AdminPage() {
         relatos: count,
       }));
     }
-  }, [filteredReports, filterTimeRange]);
+  }, [filteredReports, filterTimeRange, customStartDate, customEndDate]);
 
   if (!isAuthenticated || isLoading) {
     return (
@@ -673,7 +904,16 @@ export default function AdminPage() {
                         return (
                           <TableRow key={report.id} className="hover:bg-zinc-900/30 border-zinc-900">
                             <TableCell className="text-zinc-300 text-xs whitespace-nowrap">{dateFormatted}</TableCell>
-                            <TableCell className="font-bold text-white text-sm">{svcName}</TableCell>
+                            <TableCell className="font-bold text-white text-sm">
+                              <div className="flex flex-col sm:flex-row sm:items-center gap-1.5">
+                                <span>{svcName}</span>
+                                {report.custom_fields?.active_alert && (
+                                  <Badge className="bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[9px] px-1.5 py-0 rounded-md w-fit font-medium">
+                                    {report.custom_fields.active_alert}
+                                  </Badge>
+                                )}
+                              </div>
+                            </TableCell>
                             {formSchema.map(f => {
                               const val = (report as any)[f.id] ?? report.custom_fields?.[f.id] ?? '-';
                               return (
@@ -722,59 +962,86 @@ export default function AdminPage() {
                 <Filter className="h-4 w-4 text-indigo-400" />
                 <CardTitle className="text-sm font-bold uppercase tracking-wider text-zinc-300">Filtros Analíticos</CardTitle>
               </CardHeader>
-              <CardContent className="p-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4">
-                {/* Filter: Service */}
-                <div className="space-y-1.5">
-                  <Label className="text-xs text-zinc-400 font-semibold">Serviço</Label>
-                  <Select value={filterService} onValueChange={(val) => setFilterService(val || 'all')}>
-                    <SelectTrigger className="bg-zinc-900 border-zinc-800 text-xs h-9">
-                      <SelectValue placeholder="Selecione" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-zinc-900 border-zinc-800 text-white">
-                      <SelectItem value="all">Todos os Serviços</SelectItem>
-                      {services.map((s) => (
-                        <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {/* Dynamic Filters from Schema */}
-                {formSchema.filter(f => f.type === 'select').slice(0, 3).map(field => (
-                  <div key={field.id} className="space-y-1.5">
-                    <Label className="text-xs text-zinc-400 font-semibold">{field.label}</Label>
-                    <Select 
-                      value={dynamicFilters[field.id] || 'all'} 
-                      onValueChange={(val) => setDynamicFilters(prev => ({ ...prev, [field.id]: val || 'all' }))}
-                    >
+              <CardContent className="p-4 space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4">
+                  {/* Filter: Service */}
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-zinc-400 font-semibold">Serviço</Label>
+                    <Select value={filterService} onValueChange={(val) => setFilterService(val || 'all')}>
                       <SelectTrigger className="bg-zinc-900 border-zinc-800 text-xs h-9">
                         <SelectValue placeholder="Selecione" />
                       </SelectTrigger>
                       <SelectContent className="bg-zinc-900 border-zinc-800 text-white">
-                        <SelectItem value="all">Todas as opções</SelectItem>
-                        {field.options?.map((opt) => (
-                          <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+                        <SelectItem value="all">Todos os Serviços</SelectItem>
+                        {services.map((s) => (
+                          <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </div>
-                ))}
 
-                {/* Filter: Time Range */}
-                <div className="space-y-1.5">
-                  <Label className="text-xs text-zinc-400 font-semibold">Período</Label>
-                  <Select value={filterTimeRange} onValueChange={(val) => setFilterTimeRange(val || '24h')}>
-                    <SelectTrigger className="bg-zinc-900 border-zinc-800 text-xs h-9">
-                      <SelectValue placeholder="Selecione" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-zinc-900 border-zinc-800 text-white">
-                      <SelectItem value="24h">Últimas 24 Horas</SelectItem>
-                      <SelectItem value="7d">Últimos 7 Dias</SelectItem>
-                      <SelectItem value="30d">Últimos 30 Dias</SelectItem>
-                      <SelectItem value="all">Todo o Histórico</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  {/* Dynamic Filters from Schema */}
+                  {formSchema.filter(f => f.type === 'select').slice(0, 3).map(field => (
+                    <div key={field.id} className="space-y-1.5">
+                      <Label className="text-xs text-zinc-400 font-semibold">{field.label}</Label>
+                      <Select 
+                        value={dynamicFilters[field.id] || 'all'} 
+                        onValueChange={(val) => setDynamicFilters(prev => ({ ...prev, [field.id]: val || 'all' }))}
+                      >
+                        <SelectTrigger className="bg-zinc-900 border-zinc-800 text-xs h-9">
+                          <SelectValue placeholder="Selecione" />
+                        </SelectTrigger>
+                        <SelectContent className="bg-zinc-900 border-zinc-800 text-white">
+                          <SelectItem value="all">Todas as opções</SelectItem>
+                          {field.options?.map((opt) => (
+                            <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  ))}
+
+                  {/* Filter: Time Range */}
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-zinc-400 font-semibold">Período</Label>
+                    <Select value={filterTimeRange} onValueChange={(val) => setFilterTimeRange(val || '24h')}>
+                      <SelectTrigger className="bg-zinc-900 border-zinc-800 text-xs h-9">
+                        <SelectValue placeholder="Selecione" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-zinc-900 border-zinc-800 text-white">
+                        <SelectItem value="24h">Últimas 24 Horas</SelectItem>
+                        <SelectItem value="7d">Últimos 7 Dias</SelectItem>
+                        <SelectItem value="30d">Últimos 30 Dias</SelectItem>
+                        <SelectItem value="all">Todo o Histórico</SelectItem>
+                        <SelectItem value="custom">Personalizado</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
+
+                {/* Conditional Custom Date/Time Selectors */}
+                {filterTimeRange === 'custom' && (
+                  <div className="flex flex-col sm:flex-row gap-4 pt-4 border-t border-zinc-900/60 animate-in fade-in-50 duration-200">
+                    <div className="space-y-1.5 flex-1">
+                      <Label className="text-xs text-zinc-400 font-semibold">Data e Hora Inicial (De)</Label>
+                      <Input
+                        type="datetime-local"
+                        value={customStartDate}
+                        onChange={(e) => setCustomStartDate(e.target.value)}
+                        className="bg-zinc-900 border-zinc-800 text-white text-xs h-9 focus:border-indigo-500"
+                      />
+                    </div>
+                    <div className="space-y-1.5 flex-1">
+                      <Label className="text-xs text-zinc-400 font-semibold">Data e Hora Final (Até)</Label>
+                      <Input
+                        type="datetime-local"
+                        value={customEndDate}
+                        onChange={(e) => setCustomEndDate(e.target.value)}
+                        className="bg-zinc-900 border-zinc-800 text-white text-xs h-9 focus:border-indigo-500"
+                      />
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
@@ -915,6 +1182,90 @@ export default function AdminPage() {
                 </CardContent>
               </Card>
             </div>
+
+            {/* LIST OF FILTERED REPORTS */}
+            <Card className="bg-zinc-950/60 border-zinc-900 text-white mt-6">
+              <CardHeader className="flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle className="text-lg font-bold">Relatos Filtrados</CardTitle>
+                  <CardDescription className="text-zinc-500">
+                    Lista contendo os {filteredReports.length} relatos que correspondem aos filtros selecionados acima.
+                  </CardDescription>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {filteredReports.length === 0 ? (
+                  <div className="text-center py-12 text-zinc-500">
+                    Nenhum relato atende aos filtros selecionados.
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto rounded-lg border border-zinc-900">
+                    <Table className="bg-zinc-950/80">
+                      <TableHeader className="bg-zinc-900/50 border-zinc-850">
+                        <TableRow className="hover:bg-zinc-900/20">
+                          <TableHead className="text-zinc-400 font-semibold">Data</TableHead>
+                          <TableHead className="text-zinc-400 font-semibold">Serviço</TableHead>
+                          {formSchema.map(f => (
+                            <TableHead key={f.id} className="text-zinc-400 font-semibold">{f.label}</TableHead>
+                          ))}
+                          <TableHead className="text-zinc-400 font-semibold text-center">Resolvido?</TableHead>
+                          <TableHead className="text-zinc-400 font-semibold text-right">Ações</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {filteredReports.map((report) => {
+                          const dateFormatted = new Date(report.created_at).toLocaleString('pt-BR');
+                          const svcName = report.services?.name || services.find(s => s.id === report.service_id)?.name || 'Serviço Excluído';
+                          return (
+                            <TableRow key={report.id} className="hover:bg-zinc-900/30 border-zinc-900">
+                              <TableCell className="text-zinc-300 text-xs whitespace-nowrap">{dateFormatted}</TableCell>
+                              <TableCell className="font-bold text-white text-sm">
+                                <div className="flex flex-col sm:flex-row sm:items-center gap-1.5">
+                                  <span>{svcName}</span>
+                                  {report.custom_fields?.active_alert && (
+                                    <Badge className="bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[9px] px-1.5 py-0 rounded-md w-fit font-medium">
+                                      {report.custom_fields.active_alert}
+                                    </Badge>
+                                  )}
+                                </div>
+                              </TableCell>
+                              {formSchema.map(f => {
+                                const val = (report as any)[f.id] ?? report.custom_fields?.[f.id] ?? '-';
+                                return (
+                                  <TableCell key={f.id} className="text-zinc-300 text-xs max-w-[200px] truncate" title={val}>{val}</TableCell>
+                                );
+                              })}
+                              <TableCell className="text-center">
+                                {report.is_resolved ? (
+                                  <Badge className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] mx-auto w-fit flex gap-1 items-center justify-center">
+                                    <CheckCircle2 className="h-3 w-3" /> Sim
+                                  </Badge>
+                                ) : (
+                                  <Badge className="bg-red-500/10 text-red-400 border border-red-500/20 text-[10px] mx-auto w-fit flex gap-1 items-center justify-center">
+                                    <XCircle className="h-3 w-3" /> Não
+                                  </Badge>
+                                )}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <Button
+                                  onClick={() => handleDeleteReport(report.id)}
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg"
+                                  title="Excluir relato"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </div>
         )}
 
@@ -960,6 +1311,18 @@ export default function AdminPage() {
                 Regras de Criticidade
               </Button>
               <Button
+                onClick={() => setSettingsSubTab('alerts')}
+                variant="ghost"
+                className={`w-full justify-start rounded-xl text-xs font-semibold px-4 py-3 transition-all gap-2 ${
+                  settingsSubTab === 'alerts'
+                    ? 'bg-indigo-600/10 text-indigo-400 border border-indigo-500/20 hover:bg-indigo-600/15'
+                    : 'text-zinc-400 hover:text-white hover:bg-zinc-900/40 border border-transparent'
+                }`}
+              >
+                <AlertCircle className="h-4 w-4" />
+                Gerenciar Alertas
+              </Button>
+              <Button
                 onClick={() => setSettingsSubTab('logs')}
                 variant="ghost"
                 className={`w-full justify-start rounded-xl text-xs font-semibold px-4 py-3 transition-all gap-2 ${
@@ -974,7 +1337,7 @@ export default function AdminPage() {
             </aside>
 
             {/* CONTENT AREA */}
-            <div className="flex-1 w-full">
+            <div className="flex-1 w-full min-w-0">
               {settingsSubTab === 'cards' && (
                 <Card className="bg-zinc-950/60 border-zinc-900 text-white">
                   <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-900 pb-5">
@@ -1229,6 +1592,214 @@ export default function AdminPage() {
                 </Card>
               )}
 
+              {settingsSubTab === 'alerts' && (
+                <div className="space-y-6">
+                  {/* CONFIG DISPLAY INTERVAL */}
+                  <Card className="bg-zinc-950/60 border-zinc-900 text-white">
+                    <CardHeader>
+                      <CardTitle className="text-xl font-bold">Configurações de Exibição de Alertas</CardTitle>
+                      <CardDescription className="text-zinc-500">
+                        Ajuste o intervalo de tempo para a re-exibição do alerta na interface pública para os usuários.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <form onSubmit={handleSaveAlertConfig} className="space-y-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <Label htmlFor="displayInterval" className="text-zinc-300 font-semibold text-sm">
+                              Intervalo de Exibição (Minutos)
+                            </Label>
+                            <Input
+                              id="displayInterval"
+                              type="number"
+                              min={1}
+                              value={displayInterval}
+                              onChange={(e) => setDisplayInterval(Number(e.target.value))}
+                              className="bg-zinc-900 border-zinc-800 text-white focus:border-indigo-500"
+                              required
+                            />
+                            <p className="text-xs text-zinc-550 mt-1">
+                              O alerta ativo irá reaparecer como popup para o usuário a cada {displayInterval} minutos.
+                            </p>
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label htmlFor="autoCloseInterval" className="text-zinc-300 font-semibold text-sm">
+                              Auto-fechamento do Alerta (Segundos)
+                            </Label>
+                            <Input
+                              id="autoCloseInterval"
+                              type="number"
+                              min={0}
+                              value={autoCloseInterval}
+                              onChange={(e) => setAutoCloseInterval(Number(e.target.value))}
+                              className="bg-zinc-900 border-zinc-800 text-white focus:border-indigo-500"
+                              required
+                            />
+                            <p className="text-xs text-zinc-550 mt-1">
+                              O alerta irá fechar automaticamente após {autoCloseInterval} segundos (use 0 para desabilitar).
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex justify-end pt-2">
+                          <Button
+                            type="submit"
+                            className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-6 py-2.5 rounded-xl transition-all shadow-lg shadow-indigo-600/20"
+                            disabled={isSavingAlertsConfig}
+                          >
+                            {isSavingAlertsConfig ? 'Salvando...' : 'Salvar Configuração'}
+                          </Button>
+                        </div>
+                      </form>
+                    </CardContent>
+                  </Card>
+
+                  {/* ALERTS HISTORY & CRUD */}
+                  <Card className="bg-zinc-950/60 border-zinc-900 text-white">
+                    <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-900 pb-5">
+                      <div>
+                        <CardTitle className="text-xl font-bold">Alertas de Instabilidade de Rede</CardTitle>
+                        <CardDescription className="text-zinc-550">
+                          Crie e gerencie alertas temporários ou contínuos que serão exibidos com destaque na interface pública.
+                        </CardDescription>
+                      </div>
+                      <Button
+                        onClick={() => {
+                          setEditingAlert(null);
+                          setAlertFormTitle('');
+                          setAlertFormType('Instabilidade Geral');
+                          setAlertFormDescription('');
+                          setAlertFormExpirationType('manual');
+                          setAlertFormExpiresAt('');
+                          setIsAlertModalOpen(true);
+                        }}
+                        className="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold gap-1.5 rounded-xl text-xs py-2 px-4 shadow-lg shadow-indigo-600/10 transition-all self-start sm:self-auto"
+                      >
+                        <Plus className="h-4 w-4" />
+                        Criar Alerta
+                      </Button>
+                    </CardHeader>
+                    <CardContent className="pt-6">
+                      {networkAlerts.length === 0 ? (
+                        <div className="text-center py-10 text-zinc-550 text-xs">
+                          Nenhum alerta de instabilidade criado até o momento.
+                        </div>
+                      ) : (
+                        <div className="overflow-x-auto rounded-lg border border-zinc-900">
+                          <Table className="bg-zinc-950/80">
+                            <TableHeader className="bg-zinc-900/50 border-zinc-850">
+                              <TableRow className="hover:bg-zinc-900/20">
+                                <TableHead className="text-zinc-400 font-semibold">Alerta</TableHead>
+                                <TableHead className="text-zinc-400 font-semibold">Tipo</TableHead>
+                                <TableHead className="text-zinc-400 font-semibold">Descrição</TableHead>
+                                <TableHead className="text-zinc-400 font-semibold">Expiração</TableHead>
+                                <TableHead className="text-zinc-400 font-semibold text-center">Status</TableHead>
+                                <TableHead className="text-zinc-400 font-semibold text-right">Ações</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {networkAlerts.map((alert) => {
+                                const createdDate = new Date(alert.created_at).toLocaleString('pt-BR');
+                                
+                                // Check if expired
+                                const isExpired = alert.expires_at && new Date(alert.expires_at).getTime() < Date.now();
+                                const isActive = alert.is_active && !isExpired;
+
+                                return (
+                                  <TableRow key={alert.id} className="hover:bg-zinc-900/30 border-zinc-900">
+                                    <TableCell className="font-bold text-white text-sm">
+                                      {alert.title}
+                                      <div className="text-[10px] text-zinc-500 font-normal mt-0.5">Criado em: {createdDate}</div>
+                                    </TableCell>
+                                    <TableCell className="text-zinc-300 text-xs">
+                                      <Badge variant="outline" className="border-indigo-500/30 text-indigo-400 text-[10px]">
+                                        {alert.alert_type}
+                                      </Badge>
+                                    </TableCell>
+                                    <TableCell className="text-zinc-400 text-xs max-w-[250px] truncate" title={alert.description}>
+                                      {alert.description}
+                                    </TableCell>
+                                    <TableCell className="text-zinc-400 text-xs">
+                                      {alert.expires_at ? (
+                                        <span>Expirará: {new Date(alert.expires_at).toLocaleString('pt-BR')}</span>
+                                      ) : (
+                                        <span className="text-zinc-500">Desativação manual</span>
+                                      )}
+                                    </TableCell>
+                                    <TableCell className="text-center">
+                                      {isActive ? (
+                                        <Badge className="bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[10px] mx-auto w-fit flex gap-1 items-center justify-center">
+                                          <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse mr-1" /> Ativo
+                                        </Badge>
+                                      ) : isExpired ? (
+                                        <Badge className="bg-zinc-900 text-zinc-500 border border-zinc-800 text-[10px] mx-auto w-fit flex gap-1 items-center justify-center">
+                                          Expirado
+                                        </Badge>
+                                      ) : (
+                                        <Badge className="bg-red-500/10 text-red-400 border border-red-500/20 text-[10px] mx-auto w-fit flex gap-1 items-center justify-center">
+                                          Inativo
+                                        </Badge>
+                                      )}
+                                    </TableCell>
+                                    <TableCell className="text-right whitespace-nowrap">
+                                      <div className="flex justify-end items-center gap-1.5">
+                                        <Button
+                                          onClick={() => handleToggleAlertActive(alert.id, alert.is_active)}
+                                          variant="ghost"
+                                          size="sm"
+                                          className={`text-xs px-2.5 py-1 rounded-lg border h-8 ${
+                                            alert.is_active
+                                              ? 'border-red-500/20 text-red-450 hover:bg-red-500/10'
+                                              : 'border-emerald-500/20 text-emerald-450 hover:bg-emerald-500/10'
+                                          }`}
+                                          disabled={isExpired}
+                                          title={alert.is_active ? 'Desativar alerta' : 'Ativar alerta'}
+                                        >
+                                          {alert.is_active ? 'Desativar' : 'Ativar'}
+                                        </Button>
+                                        
+                                        <Button
+                                          onClick={() => {
+                                            setEditingAlert(alert);
+                                            setAlertFormTitle(alert.title);
+                                            setAlertFormType(alert.alert_type);
+                                            setAlertFormDescription(alert.description);
+                                            setAlertFormExpirationType(alert.expires_at ? 'scheduled' : 'manual');
+                                            setAlertFormExpiresAt(alert.expires_at ? new Date(new Date(alert.expires_at).getTime() - new Date().getTimezoneOffset() * 60 * 1000).toISOString().slice(0, 16) : '');
+                                            setIsAlertModalOpen(true);
+                                          }}
+                                          variant="ghost"
+                                          size="icon"
+                                          className="h-8 w-8 text-indigo-400 hover:text-indigo-300 hover:bg-indigo-500/10 rounded-lg"
+                                          title="Editar Alerta"
+                                        >
+                                          <Edit2 className="h-3.5 w-3.5" />
+                                        </Button>
+
+                                        <Button
+                                          onClick={() => handleDeleteAlert(alert.id)}
+                                          variant="ghost"
+                                          size="icon"
+                                          className="h-8 w-8 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg"
+                                          title="Excluir Alerta"
+                                        >
+                                          <Trash2 className="h-3.5 w-3.5" />
+                                        </Button>
+                                      </div>
+                                    </TableCell>
+                                  </TableRow>
+                                );
+                              })}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                </div>
+              )}
+
               {settingsSubTab === 'logs' && (
                 <Card className="bg-zinc-950/60 border-zinc-900 text-white">
                   <CardHeader>
@@ -1259,9 +1830,9 @@ export default function AdminPage() {
                               return (
                                 <TableRow key={log.id} className="hover:bg-zinc-900/30 border-zinc-900">
                                   <TableCell className="text-zinc-300 text-xs whitespace-nowrap">{dateFormatted}</TableCell>
-                                  <TableCell className="font-semibold text-white text-xs">{log.user_email}</TableCell>
-                                  <TableCell className="text-indigo-400 font-semibold text-xs">{log.action}</TableCell>
-                                  <TableCell className="text-zinc-400 text-xs" title={log.details}>{log.details}</TableCell>
+                                  <TableCell className="font-semibold text-white text-xs whitespace-nowrap">{log.user_email}</TableCell>
+                                  <TableCell className="text-indigo-400 font-semibold text-xs whitespace-nowrap">{log.action}</TableCell>
+                                  <TableCell className="text-zinc-400 text-xs whitespace-normal break-words min-w-[250px] max-w-xs md:max-w-md lg:max-w-xl" title={log.details}>{log.details}</TableCell>
                                 </TableRow>
                               );
                             })}
@@ -1392,6 +1963,116 @@ export default function AdminPage() {
                 ) : (
                   'Salvar Serviço'
                 )}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* NETWORK ALERT ADD/EDIT MODAL */}
+      <Dialog open={isAlertModalOpen} onOpenChange={(open) => !open && setIsAlertModalOpen(false)}>
+        <DialogContent className="max-w-md w-full bg-zinc-950 border border-zinc-800 text-white rounded-2xl p-6">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold flex items-center gap-2">
+              <AlertCircle className="h-5 w-5 text-amber-500 animate-pulse" />
+              <span>{editingAlert ? 'Editar Alerta de Instabilidade' : 'Criar Alerta de Instabilidade'}</span>
+            </DialogTitle>
+            <DialogDescription className="text-zinc-400 text-xs">
+              Publique avisos de problemas de infraestrutura ou instabilidades no site público para informar operadores e usuários.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleSaveAlert} className="space-y-4 mt-4">
+            {/* Field: Title */}
+            <div className="space-y-1.5">
+              <Label htmlFor="alertTitle" className="text-zinc-300 text-xs font-semibold">Título do Alerta *</Label>
+              <Input
+                id="alertTitle"
+                value={alertFormTitle}
+                onChange={(e) => setAlertFormTitle(e.target.value)}
+                placeholder="Ex: Instabilidade no Backbone, Falha Rota Sul"
+                className="bg-zinc-900 border-zinc-800 text-white placeholder-zinc-500"
+                required
+              />
+            </div>
+
+            {/* Field: Alert Type */}
+            <div className="space-y-1.5">
+              <Label htmlFor="alertType" className="text-zinc-300 text-xs font-semibold">Tipo do Alerta *</Label>
+              <Select value={alertFormType} onValueChange={(val) => setAlertFormType(val || 'Instabilidade Geral')}>
+                <SelectTrigger id="alertType" className="bg-zinc-900 border-zinc-800 text-white">
+                  <SelectValue placeholder="Selecione o tipo" />
+                </SelectTrigger>
+                <SelectContent className="bg-zinc-900 border-zinc-800 text-white">
+                  <SelectItem value="Instabilidade Geral">Instabilidade Geral (🟡)</SelectItem>
+                  <SelectItem value="Queda de Link / Fibra">Queda de Link / Fibra (🔴)</SelectItem>
+                  <SelectItem value="Lentidão / Latência">Lentidão / Latência (🟡)</SelectItem>
+                  <SelectItem value="Manutenção Programada">Manutenção Programada (🔵)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Field: Expiration Mode */}
+            <div className="space-y-1.5">
+              <Label htmlFor="expirationType" className="text-zinc-300 text-xs font-semibold">Tempo de Duração *</Label>
+              <Select
+                value={alertFormExpirationType}
+                onValueChange={(val: any) => setAlertFormExpirationType(val || 'manual')}
+              >
+                <SelectTrigger id="expirationType" className="bg-zinc-900 border-zinc-800 text-white">
+                  <SelectValue placeholder="Selecione o modo de expiração" />
+                </SelectTrigger>
+                <SelectContent className="bg-zinc-900 border-zinc-800 text-white">
+                  <SelectItem value="manual">Ativo até ser desativado manualmente</SelectItem>
+                  <SelectItem value="scheduled">Definir data/hora de expiração programada</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Scheduled Expiration datetime field (conditional) */}
+            {alertFormExpirationType === 'scheduled' && (
+              <div className="space-y-1.5">
+                <Label htmlFor="expiresAt" className="text-zinc-300 text-xs font-semibold">Data e Hora de Expiração *</Label>
+                <Input
+                  id="expiresAt"
+                  type="datetime-local"
+                  value={alertFormExpiresAt}
+                  onChange={(e) => setAlertFormExpiresAt(e.target.value)}
+                  className="bg-zinc-900 border-zinc-800 text-white"
+                  required
+                />
+              </div>
+            )}
+
+            {/* Field: Description */}
+            <div className="space-y-1.5">
+              <Label htmlFor="alertDescription" className="text-zinc-300 text-xs font-semibold">Descrição Informativa *</Label>
+              <textarea
+                id="alertDescription"
+                value={alertFormDescription}
+                onChange={(e) => setAlertFormDescription(e.target.value)}
+                placeholder="Ex: Identificamos lentidão no carregamento de serviços devido ao rompimento de fibra na rota Porto Alegre..."
+                className="w-full h-24 bg-zinc-900 border border-zinc-800 text-white placeholder-zinc-550 rounded-md p-3 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                required
+              />
+            </div>
+
+            {/* Modal Buttons */}
+            <div className="flex justify-end gap-3 pt-4 border-t border-zinc-800">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsAlertModalOpen(false)}
+                className="border-zinc-800 hover:bg-zinc-900 text-zinc-400 hover:text-white"
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="submit"
+                className="bg-indigo-600 hover:bg-indigo-500 text-white font-medium px-6 transition-all"
+                disabled={isSavingAlert}
+              >
+                {isSavingAlert ? 'Salvando...' : 'Salvar Alerta'}
               </Button>
             </div>
           </form>

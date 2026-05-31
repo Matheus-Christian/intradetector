@@ -32,6 +32,7 @@ interface ReportModalProps {
   service: Service | null;
   schema: FormSchema;
   onSuccess: () => void;
+  activeAlert?: any | null;
 }
 
 // Searchable combobox sub-component
@@ -116,6 +117,7 @@ export default function ReportModal({
   service,
   schema,
   onSuccess,
+  activeAlert,
 }: ReportModalProps) {
   const supabase = getSupabaseClient();
   const [dynamicData, setDynamicData] = useState<Record<string, string>>({});
@@ -146,13 +148,21 @@ export default function ReportModal({
     setIsSubmitting(true);
 
     try {
+      const customFieldsWithAlert = {
+        ...dynamicData,
+      };
+
+      if (activeAlert) {
+        customFieldsWithAlert.active_alert = activeAlert.title;
+      }
+
       const { error } = await supabase.from('reports').insert({
         service_id: service.id,
         region: dynamicData['region'] || null,
         connection_type: dynamicData['connection_type'] || null,
         issue_type: dynamicData['issue_type'] || null,
         device: dynamicData['device'] || null,
-        custom_fields: dynamicData,
+        custom_fields: customFieldsWithAlert,
         tests_done: null,
         is_resolved: isResolved === 'true',
       });

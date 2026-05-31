@@ -10,6 +10,7 @@ import { toast } from 'sonner';
 import ReportModal from '@/components/report-modal';
 import * as Icons from 'lucide-react';
 import Link from 'next/link';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import IntradetectorLogo from '@/components/intradetector-logo';
 import {
   AreaChart,
@@ -68,6 +69,13 @@ export default function HomePage() {
   // Auto-refresh clock for stats recalculation
   const [currentTime, setCurrentTime] = useState(Date.now());
 
+  // Network Alert State
+  const [networkAlerts, setNetworkAlerts] = useState<any[]>([]);
+  const [displayInterval, setDisplayInterval] = useState<number>(10); // minutes
+  const [autoCloseInterval, setAutoCloseInterval] = useState<number>(60); // seconds
+  const [activeAlert, setActiveAlert] = useState<any | null>(null);
+  const [isAlertDetailOpen, setIsAlertDetailOpen] = useState(false);
+
   // Hydration guard for Recharts
   const [isMounted, setIsMounted] = useState(false);
   useEffect(() => { setIsMounted(true); }, []);
@@ -79,6 +87,51 @@ export default function HomePage() {
     }, 60000);
     return () => clearInterval(interval);
   }, []);
+
+  // Periodic Alert Triggering
+  useEffect(() => {
+    if (!activeAlert) return;
+
+    const showAlertMessage = () => {
+      setIsAlertDetailOpen(true);
+      toast.warning(
+        <div className="flex flex-col gap-1">
+          <span className="font-bold text-amber-500 flex items-center gap-1.5">
+            <Icons.AlertTriangle className="h-4 w-4 animate-bounce" />
+            {activeAlert.title} ({activeAlert.alert_type})
+          </span>
+          <span className="text-xs text-zinc-300">{activeAlert.description}</span>
+        </div>,
+        { duration: 8000 }
+      );
+    };
+
+    const timer = setTimeout(() => {
+      showAlertMessage();
+    }, 1000);
+
+    const intervalMs = displayInterval * 60 * 1000;
+    const interval = setInterval(() => {
+      showAlertMessage();
+    }, intervalMs);
+
+    return () => {
+      clearTimeout(timer);
+      clearInterval(interval);
+    };
+  }, [activeAlert, displayInterval]);
+
+  // Auto-close alert popup after configured seconds
+  useEffect(() => {
+    if (!isAlertDetailOpen || autoCloseInterval <= 0) return;
+
+    const timer = setTimeout(() => {
+      setIsAlertDetailOpen(false);
+      toast.info("O aviso foi fechado automaticamente.", { duration: 3000 });
+    }, autoCloseInterval * 1000);
+
+    return () => clearTimeout(timer);
+  }, [isAlertDetailOpen, autoCloseInterval]);
 
   // Fetch initial data
   const fetchData = async () => {
@@ -129,6 +182,25 @@ export default function HomePage() {
             labelWarning: thresholds.value.labelWarning || 'Instabilidade',
             labelCritical: thresholds.value.labelCritical || 'Queda total'
           });
+        }
+
+        const alertsSetting = settingsData.find(s => s.key === 'network_alerts');
+        if (alertsSetting) {
+          const alertsList = alertsSetting.value || [];
+          setNetworkAlerts(alertsList);
+          
+          // Find the active alert that has not expired
+          const active = alertsList.find((a: any) => {
+            const isExpired = a.expires_at && new Date(a.expires_at).getTime() < Date.now();
+            return a.is_active && !isExpired;
+          });
+          setActiveAlert(active || null);
+        }
+
+        const alertConfigSetting = settingsData.find(s => s.key === 'network_alert_config');
+        if (alertConfigSetting) {
+          setDisplayInterval(alertConfigSetting.value?.displayInterval ?? 10);
+          setAutoCloseInterval(alertConfigSetting.value?.autoCloseInterval ?? 60);
         }
       }
     } catch (err: any) {
@@ -185,6 +257,21 @@ export default function HomePage() {
               labelCritical: updatedSetting.value.labelCritical || 'Queda total'
             });
             toast.info('Regras de cálculo de instabilidade atualizadas!');
+          }
+          if (updatedSetting.key === 'network_alerts') {
+            const alertsList = updatedSetting.value || [];
+            setNetworkAlerts(alertsList);
+            const active = alertsList.find((a: any) => {
+              const isExpired = a.expires_at && new Date(a.expires_at).getTime() < Date.now();
+              return a.is_active && !isExpired;
+            });
+            setActiveAlert(active || null);
+            toast.info('Alertas de rede atualizados!');
+          }
+          if (updatedSetting.key === 'network_alert_config') {
+            setDisplayInterval(updatedSetting.value?.displayInterval ?? 10);
+            setAutoCloseInterval(updatedSetting.value?.autoCloseInterval ?? 60);
+            toast.info('Configurações de alerta atualizadas!');
           }
         }
       )
@@ -327,6 +414,16 @@ export default function HomePage() {
       <header className="sticky top-0 z-50 border-b border-zinc-900 bg-zinc-950/80 backdrop-blur-md px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <IntradetectorLogo size="lg" showTagline={true} />
+          {activeAlert && (
+            <button
+              onClick={() => setIsAlertDetailOpen(true)}
+              className="flex items-center gap-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/20 px-3 py-1.5 rounded-full transition-all duration-300 animate-pulse cursor-pointer group shadow-lg shadow-amber-500/5 ml-2"
+              title="Clique para ver detalhes do alerta de rede"
+            >
+              <Icons.AlertTriangle className="h-4 w-4 text-amber-500 group-hover:scale-110 transition-transform" />
+              <span className="text-[10px] font-bold uppercase tracking-wider hidden sm:inline-block">Alerta de Rede</span>
+            </button>
+          )}
         </div>
 
         <Link href="/admin">
@@ -569,7 +666,58 @@ export default function HomePage() {
         service={selectedService}
         schema={formSchema}
         onSuccess={fetchData}
+        activeAlert={activeAlert}
       />
+
+      {/* ACTIVE NETWORK ALERT DETAILS MODAL */}
+      <Dialog open={isAlertDetailOpen} onOpenChange={(open) => !open && setIsAlertDetailOpen(false)}>
+        <DialogContent className="max-w-md w-full bg-zinc-950 border border-zinc-800 text-white rounded-2xl p-6 overflow-hidden">
+          {/* Subtle red ambient glow inside modal */}
+          <div className="absolute -top-12 -left-12 w-32 h-32 bg-amber-500/10 rounded-full blur-2xl pointer-events-none" />
+
+          {activeAlert && (
+            <>
+              <DialogHeader>
+                <div className="flex items-center gap-2 mb-2">
+                  <Badge variant="outline" className="border-amber-500/30 text-amber-400 text-[10px] uppercase font-bold tracking-widest flex gap-1 items-center bg-amber-500/5">
+                    <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-ping mr-1" />
+                    {activeAlert.alert_type}
+                  </Badge>
+                </div>
+                <DialogTitle className="text-xl font-extrabold flex items-center gap-2 text-white leading-tight">
+                  <Icons.AlertTriangle className="h-5 w-5 text-amber-500 animate-bounce" />
+                  <span>{activeAlert.title}</span>
+                </DialogTitle>
+                <DialogDescription className="text-zinc-500 text-[11px] pt-1">
+                  Publicado em {new Date(activeAlert.created_at).toLocaleString('pt-BR')}
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="mt-4 space-y-4 relative z-10">
+                <div className="bg-zinc-900/60 border border-zinc-800 rounded-xl p-4 text-zinc-300 text-sm leading-relaxed">
+                  {activeAlert.description}
+                </div>
+
+                <div className="bg-amber-500/5 border border-amber-500/10 rounded-xl p-3.5 flex items-start gap-3">
+                  <Icons.Info className="h-5 w-5 text-amber-400 shrink-0 mt-0.5" />
+                  <p className="text-[11px] text-amber-300/80 leading-snug">
+                    <strong>Atenção Operadores:</strong> Registrem qualquer relato técnico de instabilidade correlacionado a este alerta para fins de auditoria e mapeamento de impacto.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex justify-end mt-6 pt-4 border-t border-zinc-900">
+                <Button
+                  onClick={() => setIsAlertDetailOpen(false)}
+                  className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-6 py-2 rounded-xl transition-all shadow-lg shadow-indigo-600/10 text-xs"
+                >
+                  Entendido
+                </Button>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

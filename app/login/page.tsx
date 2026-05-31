@@ -48,6 +48,17 @@ export default function LoginPage() {
       if (error) {
         toast.error(`Falha no login: ${error.message}`);
       } else {
+        // Registrar log de auditoria de login
+        try {
+          await supabase.from('action_logs').insert({
+            user_email: email,
+            action: 'Login no Painel',
+            details: `Usuário realizou login com sucesso no painel administrativo.`
+          });
+        } catch (logErr) {
+          console.error('Erro ao gravar log de login:', logErr);
+        }
+
         toast.success('Login realizado com sucesso! Redirecionando...');
         router.push('/admin');
       }
