@@ -51,7 +51,8 @@ import {
   AlertCircle,
   Layers,
   FormInput,
-  Activity
+  Activity,
+  Eye
 } from 'lucide-react';
 import Link from 'next/link';
 import IntradetectorLogo from '@/components/intradetector-logo';
@@ -122,8 +123,39 @@ export default function AdminPage() {
   const [labelWarning, setLabelWarning] = useState<string>('Instabilidade');
   const [labelCritical, setLabelCritical] = useState<string>('Queda total');
   const [isSavingThresholds, setIsSavingThresholds] = useState(false);
-  const [settingsSubTab, setSettingsSubTab] = useState<'cards' | 'form' | 'rules' | 'alerts' | 'logs'>('cards');
+  const [settingsSubTab, setSettingsSubTab] = useState<'cards' | 'form' | 'rules' | 'alerts' | 'logs' | 'users'>('cards');
   const [actionLogs, setActionLogs] = useState<any[]>([]);
+
+  // --- USER MANAGEMENT & RBAC STATE ---
+  const [currentUserProfile, setCurrentUserProfile] = useState<any | null>(null);
+  const [adminUsersList, setAdminUsersList] = useState<any[]>([]);
+  const [isUserModalOpen, setIsUserModalOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState<any | null>(null);
+  const [userFormEmail, setUserFormEmail] = useState('');
+  const [userFormPassword, setUserFormPassword] = useState('');
+  const [userFormRole, setUserFormRole] = useState<'superadmin' | 'admin'>('admin');
+  const [userFormPermissions, setUserFormPermissions] = useState<Record<string, boolean | 'read' | 'write' | 'none'>>({
+    cards: false,
+    form: false,
+    rules: false,
+    alerts: false,
+    logs: false
+  });
+  const [isSavingUser, setIsSavingUser] = useState(false);
+
+  const hasWriteAccess = (tab: 'cards' | 'form' | 'rules' | 'alerts' | 'logs') => {
+    if (!currentUserProfile) return false;
+    if (currentUserProfile.role === 'superadmin') return true;
+    const perm = currentUserProfile.permissions?.[tab];
+    return perm === 'write';
+  };
+
+  const hasReadAccess = (tab: 'cards' | 'form' | 'rules' | 'alerts' | 'logs') => {
+    if (!currentUserProfile) return false;
+    if (currentUserProfile.role === 'superadmin') return true;
+    const perm = currentUserProfile.permissions?.[tab];
+    return perm === 'read' || perm === 'write' || perm === true;
+  };
 
   // --- ALERT MANAGEMENT STATE ---
   const [networkAlerts, setNetworkAlerts] = useState<any[]>([]);
@@ -256,6 +288,63 @@ export default function AdminPage() {
         console.warn('Tabela action_logs não encontrada ou não migrada ainda.');
       } else if (logsData) {
         setActionLogs(logsData);
+      }
+
+      // 6. Fetch Admin Profiles
+      const { data: adminUsersSetting } = await supabase
+        .from('settings')
+        .select('*')
+        .eq('key', 'admin_users')
+        .single();
+
+      let usersList: any[] = [];
+      if (adminUsersSetting) {
+        usersList = adminUsersSetting.value || [];
+      }
+      setAdminUsersList(usersList);
+
+      const { data: { session } } = await supabase.auth.getSession();
+      const currentUserEmail = session?.user?.email;
+
+      if (currentUserEmail) {
+        let profile = usersList.find((u: any) => u.email.toLowerCase() === currentUserEmail.toLowerCase());
+        
+        if (!profile) {
+          profile = {
+            email: currentUserEmail,
+            role: 'superadmin',
+            permissions: { cards: true, form: true, rules: true, alerts: true, logs: true }
+          };
+          usersList = [...usersList, profile];
+          
+          await supabase.from('settings').upsert({
+            key: 'admin_users',
+            value: usersList,
+            updated_at: new Date().toISOString()
+          });
+          setAdminUsersList(usersList);
+        }
+        setCurrentUserProfile(profile);
+
+        // If the profile is admin, automatically set settingsSubTab to the first allowed tab
+        if (profile.role === 'admin') {
+          const allowedTabs = Object.entries(profile.permissions || {})
+            .filter(([_, allowed]) => allowed && allowed !== 'none')
+            .map(([tab]) => tab);
+          if (allowedTabs.length > 0) {
+            const tabMap: Record<string, 'cards' | 'form' | 'rules' | 'alerts' | 'logs' | 'users'> = {
+              cards: 'cards',
+              form: 'form',
+              rules: 'rules',
+              alerts: 'alerts',
+              logs: 'logs'
+            };
+            const firstAllowedTab = tabMap[allowedTabs[0]];
+            if (firstAllowedTab) {
+              setSettingsSubTab(firstAllowedTab);
+            }
+          }
+        }
       }
     } catch (err: any) {
       console.error(err);
@@ -591,6 +680,140 @@ export default function AdminPage() {
       setNetworkAlerts(updatedAlerts);
     } catch (err: any) {
       toast.error(`Erro ao deletar alerta: ${err.message}`);
+    }
+  };
+
+  // --- USER CRUD HANDLERS ---
+  const handleOpenAddUser = () => {
+    setEditingUser(null);
+    setUserFormEmail('');
+    setUserFormPassword('');
+    setUserFormRole('admin');
+    setUserFormPermissions({ cards: false, form: false, rules: false, alerts: false, logs: false });
+    setIsUserModalOpen(true);
+  };
+
+  const handleOpenEditUser = (user: any) => {
+    setEditingUser(user);
+    setUserFormEmail(user.email);
+    setUserFormPassword('');
+    setUserFormRole(user.role);
+    setUserFormPermissions(user.permissions || { cards: false, form: false, rules: false, alerts: false, logs: false });
+    setIsUserModalOpen(true);
+  };
+
+  const handleSaveUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!userFormEmail.trim()) {
+      toast.error('O e-mail é obrigatório.');
+      return;
+    }
+    if (!editingUser && !userFormPassword.trim()) {
+      toast.error('A senha é obrigatória para novos usuários.');
+      return;
+    }
+
+    setIsSavingUser(true);
+    try {
+      let updatedList = [...adminUsersList];
+
+      if (editingUser) {
+        // EDITING USER
+        updatedList = adminUsersList.map(u => {
+          if (u.email.toLowerCase() === editingUser.email.toLowerCase()) {
+            return {
+              ...u,
+              role: userFormRole,
+              permissions: userFormRole === 'superadmin' 
+                ? { cards: true, form: true, rules: true, alerts: true, logs: true }
+                : userFormPermissions
+            };
+          }
+          return u;
+        });
+        
+        const { error } = await supabase.from('settings').upsert({
+          key: 'admin_users',
+          value: updatedList,
+          updated_at: new Date().toISOString()
+        });
+        if (error) throw error;
+        
+        await logAction('Editar Usuário', `Editou permissões do usuário ${userFormEmail}.`);
+        toast.success('Usuário atualizado com sucesso!');
+      } else {
+        // CREATING NEW USER
+        const { createBrowserClient } = await import('@supabase/ssr');
+        const tempSupabase = createBrowserClient(
+          process.env.NEXT_PUBLIC_SUPABASE_URL!,
+          process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+          { auth: { persistSession: false } }
+        );
+
+        const { error: signUpError } = await tempSupabase.auth.signUp({
+          email: userFormEmail.trim(),
+          password: userFormPassword.trim()
+        });
+
+        if (signUpError) throw new Error(`Erro no Supabase Auth: ${signUpError.message}`);
+
+        const newUser = {
+          email: userFormEmail.trim().toLowerCase(),
+          role: userFormRole,
+          permissions: userFormRole === 'superadmin'
+            ? { cards: true, form: true, rules: true, alerts: true, logs: true }
+            : userFormPermissions
+        };
+        
+        updatedList = [...updatedList, newUser];
+
+        const { error: dbError } = await supabase.from('settings').upsert({
+          key: 'admin_users',
+          value: updatedList,
+          updated_at: new Date().toISOString()
+        });
+        if (dbError) throw dbError;
+
+        await logAction('Criar Usuário', `Criou novo usuário administrativo: ${userFormEmail}.`);
+        toast.success('Novo usuário administrativo criado com sucesso!');
+      }
+
+      setAdminUsersList(updatedList);
+      setIsUserModalOpen(false);
+    } catch (err: any) {
+      toast.error(`Falha ao salvar usuário: ${err.message}`);
+      console.error(err);
+    } finally {
+      setIsSavingUser(false);
+    }
+  };
+
+  const handleDeleteUser = async (email: string) => {
+    if (email.toLowerCase() === currentUserProfile?.email.toLowerCase()) {
+      toast.error('Você não pode excluir o seu próprio perfil!');
+      return;
+    }
+
+    if (!confirm(`Deseja realmente remover o usuário administrador ${email}? Ele perderá o acesso ao painel imediatamente.`)) {
+      return;
+    }
+
+    try {
+      const updatedList = adminUsersList.filter(u => u.email.toLowerCase() !== email.toLowerCase());
+
+      const { error } = await supabase.from('settings').upsert({
+        key: 'admin_users',
+        value: updatedList,
+        updated_at: new Date().toISOString()
+      });
+      if (error) throw error;
+
+      await logAction('Remover Usuário', `Removeu o acesso do usuário: ${email}.`);
+      toast.success('Usuário removido com sucesso!');
+      setAdminUsersList(updatedList);
+    } catch (err: any) {
+      toast.error(`Falha ao remover usuário: ${err.message}`);
+      console.error(err);
     }
   };
 
@@ -1274,66 +1497,90 @@ export default function AdminPage() {
           <div className="flex flex-col md:flex-row gap-6 items-start w-full">
             {/* SIDEBAR MENU */}
             <aside className="w-full md:w-64 flex flex-col gap-1.5 bg-zinc-950/40 p-3 rounded-2xl border border-zinc-900/60 md:sticky md:top-24">
-              <Button
-                onClick={() => setSettingsSubTab('cards')}
-                variant="ghost"
-                className={`w-full justify-start rounded-xl text-xs font-semibold px-4 py-3 transition-all gap-2 ${
-                  settingsSubTab === 'cards'
-                    ? 'bg-indigo-600/10 text-indigo-400 border border-indigo-500/20 hover:bg-indigo-600/15'
-                    : 'text-zinc-400 hover:text-white hover:bg-zinc-900/40 border border-transparent'
-                }`}
-              >
-                <Layers className="h-4 w-4" />
-                Gerenciamento de Cards
-              </Button>
-              <Button
-                onClick={() => setSettingsSubTab('form')}
-                variant="ghost"
-                className={`w-full justify-start rounded-xl text-xs font-semibold px-4 py-3 transition-all gap-2 ${
-                  settingsSubTab === 'form'
-                    ? 'bg-indigo-600/10 text-indigo-400 border border-indigo-500/20 hover:bg-indigo-600/15'
-                    : 'text-zinc-400 hover:text-white hover:bg-zinc-900/40 border border-transparent'
-                }`}
-              >
-                <FormInput className="h-4 w-4" />
-                Construtor de Formulários
-              </Button>
-              <Button
-                onClick={() => setSettingsSubTab('rules')}
-                variant="ghost"
-                className={`w-full justify-start rounded-xl text-xs font-semibold px-4 py-3 transition-all gap-2 ${
-                  settingsSubTab === 'rules'
-                    ? 'bg-indigo-600/10 text-indigo-400 border border-indigo-500/20 hover:bg-indigo-600/15'
-                    : 'text-zinc-400 hover:text-white hover:bg-zinc-900/40 border border-transparent'
-                }`}
-              >
-                <Sliders className="h-4 w-4" />
-                Regras de Criticidade
-              </Button>
-              <Button
-                onClick={() => setSettingsSubTab('alerts')}
-                variant="ghost"
-                className={`w-full justify-start rounded-xl text-xs font-semibold px-4 py-3 transition-all gap-2 ${
-                  settingsSubTab === 'alerts'
-                    ? 'bg-indigo-600/10 text-indigo-400 border border-indigo-500/20 hover:bg-indigo-600/15'
-                    : 'text-zinc-400 hover:text-white hover:bg-zinc-900/40 border border-transparent'
-                }`}
-              >
-                <AlertCircle className="h-4 w-4" />
-                Gerenciar Alertas
-              </Button>
-              <Button
-                onClick={() => setSettingsSubTab('logs')}
-                variant="ghost"
-                className={`w-full justify-start rounded-xl text-xs font-semibold px-4 py-3 transition-all gap-2 ${
-                  settingsSubTab === 'logs'
-                    ? 'bg-indigo-600/10 text-indigo-400 border border-indigo-500/20 hover:bg-indigo-600/15'
-                    : 'text-zinc-400 hover:text-white hover:bg-zinc-900/40 border border-transparent'
-                }`}
-              >
-                <Activity className="h-4 w-4" />
-                Logs de Auditoria
-              </Button>
+              {hasReadAccess('cards') && (
+                <Button
+                  onClick={() => setSettingsSubTab('cards')}
+                  variant="ghost"
+                  className={`w-full justify-start rounded-xl text-xs font-semibold px-4 py-3 transition-all gap-2 ${
+                    settingsSubTab === 'cards'
+                      ? 'bg-indigo-600/10 text-indigo-400 border border-indigo-500/20 hover:bg-indigo-600/15'
+                      : 'text-zinc-400 hover:text-white hover:bg-zinc-900/40 border border-transparent'
+                  }`}
+                >
+                  <Layers className="h-4 w-4" />
+                  Gerenciamento de Cards
+                </Button>
+              )}
+              {hasReadAccess('form') && (
+                <Button
+                  onClick={() => setSettingsSubTab('form')}
+                  variant="ghost"
+                  className={`w-full justify-start rounded-xl text-xs font-semibold px-4 py-3 transition-all gap-2 ${
+                    settingsSubTab === 'form'
+                      ? 'bg-indigo-600/10 text-indigo-400 border border-indigo-500/20 hover:bg-indigo-600/15'
+                      : 'text-zinc-400 hover:text-white hover:bg-zinc-900/40 border border-transparent'
+                  }`}
+                >
+                  <FormInput className="h-4 w-4" />
+                  Construtor de Formulários
+                </Button>
+              )}
+              {hasReadAccess('rules') && (
+                <Button
+                  onClick={() => setSettingsSubTab('rules')}
+                  variant="ghost"
+                  className={`w-full justify-start rounded-xl text-xs font-semibold px-4 py-3 transition-all gap-2 ${
+                    settingsSubTab === 'rules'
+                      ? 'bg-indigo-600/10 text-indigo-400 border border-indigo-500/20 hover:bg-indigo-600/15'
+                      : 'text-zinc-400 hover:text-white hover:bg-zinc-900/40 border border-transparent'
+                  }`}
+                >
+                  <Sliders className="h-4 w-4" />
+                  Regras de Criticidade
+                </Button>
+              )}
+              {hasReadAccess('alerts') && (
+                <Button
+                  onClick={() => setSettingsSubTab('alerts')}
+                  variant="ghost"
+                  className={`w-full justify-start rounded-xl text-xs font-semibold px-4 py-3 transition-all gap-2 ${
+                    settingsSubTab === 'alerts'
+                      ? 'bg-indigo-600/10 text-indigo-400 border border-indigo-500/20 hover:bg-indigo-600/15'
+                      : 'text-zinc-400 hover:text-white hover:bg-zinc-900/40 border border-transparent'
+                  }`}
+                >
+                  <AlertCircle className="h-4 w-4" />
+                  Gerenciar Alertas
+                </Button>
+              )}
+              {hasReadAccess('logs') && (
+                <Button
+                  onClick={() => setSettingsSubTab('logs')}
+                  variant="ghost"
+                  className={`w-full justify-start rounded-xl text-xs font-semibold px-4 py-3 transition-all gap-2 ${
+                    settingsSubTab === 'logs'
+                      ? 'bg-indigo-600/10 text-indigo-400 border border-indigo-500/20 hover:bg-indigo-600/15'
+                      : 'text-zinc-400 hover:text-white hover:bg-zinc-900/40 border border-transparent'
+                  }`}
+                >
+                  <Activity className="h-4 w-4" />
+                  Logs de Auditoria
+                </Button>
+              )}
+              {currentUserProfile?.role === 'superadmin' && (
+                <Button
+                  onClick={() => setSettingsSubTab('users')}
+                  variant="ghost"
+                  className={`w-full justify-start rounded-xl text-xs font-semibold px-4 py-3 transition-all gap-2 ${
+                    settingsSubTab === 'users'
+                      ? 'bg-indigo-600/10 text-indigo-400 border border-indigo-500/20 hover:bg-indigo-600/15'
+                      : 'text-zinc-400 hover:text-white hover:bg-zinc-900/40 border border-transparent'
+                  }`}
+                >
+                  <Shield className="h-4 w-4" />
+                  Gerenciamento de Usuários
+                </Button>
+              )}
             </aside>
 
             {/* CONTENT AREA */}
@@ -1342,18 +1589,27 @@ export default function AdminPage() {
                 <Card className="bg-zinc-950/60 border-zinc-900 text-white">
                   <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-900 pb-5">
                     <div>
-                      <CardTitle className="text-xl font-bold">Gerenciamento de Serviços (Cards)</CardTitle>
-                      <CardDescription className="text-zinc-500">
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                        <CardTitle className="text-xl font-bold">Gerenciamento de Serviços (Cards)</CardTitle>
+                        {!hasWriteAccess('cards') && (
+                          <Badge className="bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[10px] px-2 py-0.5 rounded-md font-semibold select-none flex gap-1 items-center">
+                            <Eye className="h-3 w-3" /> Apenas Visualização
+                          </Badge>
+                        )}
+                      </div>
+                      <CardDescription className="text-zinc-500 mt-1">
                         Insira novos cards de serviços, edite nomes, categorias ou altere o status de forma manual se necessário.
                       </CardDescription>
                     </div>
-                    <Button
-                      onClick={handleOpenAddService}
-                      className="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold gap-1.5 rounded-xl text-xs py-2 px-4 shadow-lg shadow-indigo-600/10 transition-all self-start sm:self-auto"
-                    >
-                      <Plus className="h-4 w-4" />
-                      Novo Serviço
-                    </Button>
+                    {hasWriteAccess('cards') && (
+                      <Button
+                        onClick={handleOpenAddService}
+                        className="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold gap-1.5 rounded-xl text-xs py-2 px-4 shadow-lg shadow-indigo-600/10 transition-all self-start sm:self-auto"
+                      >
+                        <Plus className="h-4 w-4" />
+                        Novo Serviço
+                      </Button>
+                    )}
                   </CardHeader>
                   <CardContent className="pt-6">
                     {services.length === 0 ? (
@@ -1368,7 +1624,9 @@ export default function AdminPage() {
                               <TableHead className="text-zinc-400 font-semibold">Nome</TableHead>
                               <TableHead className="text-zinc-400 font-semibold">Categoria</TableHead>
                               <TableHead className="text-zinc-400 font-semibold">Ícone</TableHead>
-                              <TableHead className="text-zinc-400 font-semibold text-right">Ações</TableHead>
+                              {hasWriteAccess('cards') && (
+                                <TableHead className="text-zinc-400 font-semibold text-right">Ações</TableHead>
+                              )}
                             </TableRow>
                           </TableHeader>
                           <TableBody>
@@ -1378,26 +1636,28 @@ export default function AdminPage() {
                                   <TableCell className="font-bold text-white text-sm">{service.name}</TableCell>
                                   <TableCell className="text-zinc-300 text-xs">{service.category}</TableCell>
                                   <TableCell className="text-zinc-400 text-xs font-mono">{service.icon_name || 'Globe'}</TableCell>
-                                  <TableCell className="text-right flex justify-end gap-1.5">
-                                    <Button
-                                      onClick={() => handleOpenEditService(service)}
-                                      variant="ghost"
-                                      size="icon"
-                                      className="h-8 w-8 text-indigo-400 hover:text-indigo-300 hover:bg-indigo-500/10 rounded-lg"
-                                      title="Editar Serviço"
-                                    >
-                                      <Edit2 className="h-3.5 w-3.5" />
-                                    </Button>
-                                    <Button
-                                      onClick={() => handleDeleteService(service.id)}
-                                      variant="ghost"
-                                      size="icon"
-                                      className="h-8 w-8 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg"
-                                      title="Excluir Serviço"
-                                    >
-                                      <Trash2 className="h-3.5 w-3.5" />
-                                    </Button>
-                                  </TableCell>
+                                  {hasWriteAccess('cards') && (
+                                    <TableCell className="text-right flex justify-end gap-1.5">
+                                      <Button
+                                        onClick={() => handleOpenEditService(service)}
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-8 w-8 text-indigo-400 hover:text-indigo-300 hover:bg-indigo-500/10 rounded-lg"
+                                        title="Editar Serviço"
+                                      >
+                                        <Edit2 className="h-3.5 w-3.5" />
+                                      </Button>
+                                      <Button
+                                        onClick={() => handleDeleteService(service.id)}
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-8 w-8 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg"
+                                        title="Excluir Serviço"
+                                      >
+                                        <Trash2 className="h-3.5 w-3.5" />
+                                      </Button>
+                                    </TableCell>
+                                  )}
                                 </TableRow>
                               );
                             })}
@@ -1412,32 +1672,41 @@ export default function AdminPage() {
               {settingsSubTab === 'form' && (
                 <Card className="bg-zinc-950/60 border-zinc-900 text-white">
                   <CardHeader>
-                    <CardTitle className="text-xl font-bold">Construtor de Formulário</CardTitle>
-                    <CardDescription className="text-zinc-500">
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                      <CardTitle className="text-xl font-bold">Construtor de Formulário</CardTitle>
+                      {!hasWriteAccess('form') && (
+                        <Badge className="bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[10px] px-2 py-0.5 rounded-md font-semibold select-none flex gap-1 items-center">
+                          <Eye className="h-3 w-3" /> Apenas Visualização
+                        </Badge>
+                      )}
+                    </div>
+                    <CardDescription className="text-zinc-550 mt-1">
                       Crie e edite os campos que serão exibidos no momento que o usuário for reportar uma instabilidade.
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
                     <form onSubmit={handleSaveSettings} className="space-y-6">
                       
-                      <FormBuilder schema={formSchema} onChange={setFormSchema} />
+                      <FormBuilder schema={formSchema} onChange={hasWriteAccess('form') ? setFormSchema : () => {}} />
 
-                      <div className="flex justify-end pt-4 border-t border-zinc-900">
-                        <Button
-                          type="submit"
-                          className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-8 py-2.5 rounded-xl transition-all shadow-lg shadow-indigo-600/20"
-                          disabled={isSavingSettings}
-                        >
-                          {isSavingSettings ? (
-                            <span className="flex items-center gap-2">
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                              Salvando...
-                            </span>
-                          ) : (
-                            'Salvar Formulário'
-                          )}
-                        </Button>
-                      </div>
+                      {hasWriteAccess('form') && (
+                        <div className="flex justify-end pt-4 border-t border-zinc-900">
+                          <Button
+                            type="submit"
+                            className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-8 py-2.5 rounded-xl transition-all shadow-lg shadow-indigo-600/20"
+                            disabled={isSavingSettings}
+                          >
+                            {isSavingSettings ? (
+                              <span className="flex items-center gap-2">
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                                Salvando...
+                              </span>
+                            ) : (
+                              'Salvar Formulário'
+                            )}
+                          </Button>
+                        </div>
+                      )}
                     </form>
                   </CardContent>
                 </Card>
@@ -1445,13 +1714,18 @@ export default function AdminPage() {
 
               {settingsSubTab === 'rules' && (
                 <Card className="bg-zinc-950/60 border-zinc-900 text-white">
-                  <CardHeader className="flex flex-row items-center justify-between">
-                    <div>
+                  <CardHeader>
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-3">
                       <CardTitle className="text-xl font-bold">Regras de Criticidade (Algoritmo Automático)</CardTitle>
-                      <CardDescription className="text-zinc-500">
-                        Defina quantos relatos em um curto período são necessários para disparar alertas visuais no site público.
-                      </CardDescription>
+                      {!hasWriteAccess('rules') && (
+                        <Badge className="bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[10px] px-2 py-0.5 rounded-md font-semibold select-none flex gap-1 items-center">
+                          <Eye className="h-3 w-3" /> Apenas Visualização
+                        </Badge>
+                      )}
                     </div>
+                    <CardDescription className="text-zinc-550 mt-1">
+                      Defina quantos relatos em um curto período são necessários para disparar alertas visuais no site público.
+                    </CardDescription>
                   </CardHeader>
                   <CardContent>
                     <form onSubmit={handleSaveThresholds} className="space-y-6">
@@ -1466,6 +1740,7 @@ export default function AdminPage() {
                             value={thresholdWindow}
                             onChange={(e) => setThresholdWindow(Number(e.target.value))}
                             className="bg-zinc-900 border-zinc-800 text-white focus:border-indigo-500"
+                            disabled={!hasWriteAccess('rules')}
                             required
                           />
                           <p className="text-xs text-zinc-500">Janela de criticidade de {thresholdWindow} min.</p>
@@ -1481,6 +1756,7 @@ export default function AdminPage() {
                             value={thresholdWarning}
                             onChange={(e) => setThresholdWarning(Number(e.target.value))}
                             className="bg-zinc-900 border-zinc-800 text-amber-400 focus:border-amber-500"
+                            disabled={!hasWriteAccess('rules')}
                             required
                           />
                           <p className="text-xs text-zinc-500">Mínimo para card amarelo.</p>
@@ -1496,6 +1772,7 @@ export default function AdminPage() {
                             value={thresholdCritical}
                             onChange={(e) => setThresholdCritical(Number(e.target.value))}
                             className="bg-zinc-900 border-zinc-800 text-red-400 focus:border-red-500"
+                            disabled={!hasWriteAccess('rules')}
                             required
                           />
                           <p className="text-xs text-zinc-500">Mínimo para card vermelho.</p>
@@ -1504,7 +1781,11 @@ export default function AdminPage() {
                         {/* Public Chart Window Limit */}
                         <div className="space-y-2">
                           <Label htmlFor="chartWindowHours" className="text-indigo-400 font-semibold text-sm">Janela do Gráfico Público</Label>
-                          <Select value={String(chartWindowHours)} onValueChange={(val) => setChartWindowHours(Number(val || '24'))}>
+                          <Select 
+                            value={String(chartWindowHours)} 
+                            onValueChange={(val) => setChartWindowHours(Number(val || '24'))}
+                            disabled={!hasWriteAccess('rules')}
+                          >
                             <SelectTrigger id="chartWindowHours" className="bg-zinc-900 border-zinc-800 text-white focus:border-indigo-500">
                               <SelectValue placeholder="Selecione" />
                             </SelectTrigger>
@@ -1532,8 +1813,9 @@ export default function AdminPage() {
                               type="text"
                               value={labelNormal}
                               onChange={(e) => setLabelNormal(e.target.value)}
-                              className="bg-zinc-900 border-zinc-800 text-emerald-400 focus:border-emerald-500"
+                              className="bg-zinc-900 border-zinc-800 text-emerald-400 focus:border-emerald-550"
                               placeholder="Ex: Operando"
+                              disabled={!hasWriteAccess('rules')}
                               required
                             />
                             <p className="text-xs text-zinc-500">Texto para funcionamento normal.</p>
@@ -1549,6 +1831,7 @@ export default function AdminPage() {
                               onChange={(e) => setLabelWarning(e.target.value)}
                               className="bg-zinc-900 border-zinc-800 text-amber-400 focus:border-amber-500"
                               placeholder="Ex: Instabilidade"
+                              disabled={!hasWriteAccess('rules')}
                               required
                             />
                             <p className="text-xs text-zinc-500">Texto para instabilidade.</p>
@@ -1562,8 +1845,9 @@ export default function AdminPage() {
                               type="text"
                               value={labelCritical}
                               onChange={(e) => setLabelCritical(e.target.value)}
-                              className="bg-zinc-900 border-zinc-800 text-red-400 focus:border-red-500"
+                              className="bg-zinc-900 border-zinc-800 text-red-450 focus:border-red-500"
                               placeholder="Ex: Queda total"
+                              disabled={!hasWriteAccess('rules')}
                               required
                             />
                             <p className="text-xs text-zinc-500">Texto para falha total.</p>
@@ -1571,22 +1855,24 @@ export default function AdminPage() {
                         </div>
                       </div>
 
-                      <div className="flex justify-end pt-4 border-t border-zinc-900">
-                        <Button
-                          type="submit"
-                          className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-8 py-2.5 rounded-xl transition-all shadow-lg shadow-indigo-600/20"
-                          disabled={isSavingThresholds}
-                        >
-                          {isSavingThresholds ? (
-                            <span className="flex items-center gap-2">
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                              Salvando...
-                            </span>
-                          ) : (
-                            'Salvar Regras'
-                          )}
-                        </Button>
-                      </div>
+                      {hasWriteAccess('rules') && (
+                        <div className="flex justify-end pt-4 border-t border-zinc-900">
+                          <Button
+                            type="submit"
+                            className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-8 py-2.5 rounded-xl transition-all shadow-lg shadow-indigo-600/20"
+                            disabled={isSavingThresholds}
+                          >
+                            {isSavingThresholds ? (
+                              <span className="flex items-center gap-2">
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                                Salvando...
+                              </span>
+                            ) : (
+                              'Salvar Regras'
+                            )}
+                          </Button>
+                        </div>
+                      )}
                     </form>
                   </CardContent>
                 </Card>
@@ -1597,8 +1883,15 @@ export default function AdminPage() {
                   {/* CONFIG DISPLAY INTERVAL */}
                   <Card className="bg-zinc-950/60 border-zinc-900 text-white">
                     <CardHeader>
-                      <CardTitle className="text-xl font-bold">Configurações de Exibição de Alertas</CardTitle>
-                      <CardDescription className="text-zinc-500">
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                        <CardTitle className="text-xl font-bold">Configurações de Exibição de Alertas</CardTitle>
+                        {!hasWriteAccess('alerts') && (
+                          <Badge className="bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[10px] px-2 py-0.5 rounded-md font-semibold select-none flex gap-1 items-center">
+                            <Eye className="h-3 w-3" /> Apenas Visualização
+                          </Badge>
+                        )}
+                      </div>
+                      <CardDescription className="text-zinc-500 mt-1">
                         Ajuste o intervalo de tempo para a re-exibição do alerta na interface pública para os usuários.
                       </CardDescription>
                     </CardHeader>
@@ -1616,9 +1909,10 @@ export default function AdminPage() {
                               value={displayInterval}
                               onChange={(e) => setDisplayInterval(Number(e.target.value))}
                               className="bg-zinc-900 border-zinc-800 text-white focus:border-indigo-500"
+                              disabled={!hasWriteAccess('alerts')}
                               required
                             />
-                            <p className="text-xs text-zinc-550 mt-1">
+                            <p className="text-xs text-zinc-555 mt-1">
                               O alerta ativo irá reaparecer como popup para o usuário a cada {displayInterval} minutos.
                             </p>
                           </div>
@@ -1634,23 +1928,26 @@ export default function AdminPage() {
                               value={autoCloseInterval}
                               onChange={(e) => setAutoCloseInterval(Number(e.target.value))}
                               className="bg-zinc-900 border-zinc-800 text-white focus:border-indigo-500"
+                              disabled={!hasWriteAccess('alerts')}
                               required
                             />
-                            <p className="text-xs text-zinc-550 mt-1">
+                            <p className="text-xs text-zinc-555 mt-1">
                               O alerta irá fechar automaticamente após {autoCloseInterval} segundos (use 0 para desabilitar).
                             </p>
                           </div>
                         </div>
 
-                        <div className="flex justify-end pt-2">
-                          <Button
-                            type="submit"
-                            className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-6 py-2.5 rounded-xl transition-all shadow-lg shadow-indigo-600/20"
-                            disabled={isSavingAlertsConfig}
-                          >
-                            {isSavingAlertsConfig ? 'Salvando...' : 'Salvar Configuração'}
-                          </Button>
-                        </div>
+                        {hasWriteAccess('alerts') && (
+                          <div className="flex justify-end pt-2">
+                            <Button
+                              type="submit"
+                              className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-6 py-2.5 rounded-xl transition-all shadow-lg shadow-indigo-600/20"
+                              disabled={isSavingAlertsConfig}
+                            >
+                              {isSavingAlertsConfig ? 'Salvando...' : 'Salvar Configuração'}
+                            </Button>
+                          </div>
+                        )}
                       </form>
                     </CardContent>
                   </Card>
@@ -1659,26 +1956,35 @@ export default function AdminPage() {
                   <Card className="bg-zinc-950/60 border-zinc-900 text-white">
                     <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-900 pb-5">
                       <div>
-                        <CardTitle className="text-xl font-bold">Alertas de Instabilidade de Rede</CardTitle>
-                        <CardDescription className="text-zinc-550">
+                        <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                          <CardTitle className="text-xl font-bold">Alertas de Instabilidade de Rede</CardTitle>
+                          {!hasWriteAccess('alerts') && (
+                            <Badge className="bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[10px] px-2 py-0.5 rounded-md font-semibold select-none flex gap-1 items-center">
+                              <Eye className="h-3 w-3" /> Apenas Visualização
+                            </Badge>
+                          )}
+                        </div>
+                        <CardDescription className="text-zinc-550 mt-1">
                           Crie e gerencie alertas temporários ou contínuos que serão exibidos com destaque na interface pública.
                         </CardDescription>
                       </div>
-                      <Button
-                        onClick={() => {
-                          setEditingAlert(null);
-                          setAlertFormTitle('');
-                          setAlertFormType('Instabilidade Geral');
-                          setAlertFormDescription('');
-                          setAlertFormExpirationType('manual');
-                          setAlertFormExpiresAt('');
-                          setIsAlertModalOpen(true);
-                        }}
-                        className="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold gap-1.5 rounded-xl text-xs py-2 px-4 shadow-lg shadow-indigo-600/10 transition-all self-start sm:self-auto"
-                      >
-                        <Plus className="h-4 w-4" />
-                        Criar Alerta
-                      </Button>
+                      {hasWriteAccess('alerts') && (
+                        <Button
+                          onClick={() => {
+                            setEditingAlert(null);
+                            setAlertFormTitle('');
+                            setAlertFormType('Instabilidade Geral');
+                            setAlertFormDescription('');
+                            setAlertFormExpirationType('manual');
+                            setAlertFormExpiresAt('');
+                            setIsAlertModalOpen(true);
+                          }}
+                          className="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold gap-1.5 rounded-xl text-xs py-2 px-4 shadow-lg shadow-indigo-600/10 transition-all self-start sm:self-auto"
+                        >
+                          <Plus className="h-4 w-4" />
+                          Criar Alerta
+                        </Button>
+                      )}
                     </CardHeader>
                     <CardContent className="pt-6">
                       {networkAlerts.length === 0 ? (
@@ -1695,7 +2001,9 @@ export default function AdminPage() {
                                 <TableHead className="text-zinc-400 font-semibold">Descrição</TableHead>
                                 <TableHead className="text-zinc-400 font-semibold">Expiração</TableHead>
                                 <TableHead className="text-zinc-400 font-semibold text-center">Status</TableHead>
-                                <TableHead className="text-zinc-400 font-semibold text-right">Ações</TableHead>
+                                {hasWriteAccess('alerts') && (
+                                  <TableHead className="text-zinc-400 font-semibold text-right">Ações</TableHead>
+                                )}
                               </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -1742,52 +2050,54 @@ export default function AdminPage() {
                                         </Badge>
                                       )}
                                     </TableCell>
-                                    <TableCell className="text-right whitespace-nowrap">
-                                      <div className="flex justify-end items-center gap-1.5">
-                                        <Button
-                                          onClick={() => handleToggleAlertActive(alert.id, alert.is_active)}
-                                          variant="ghost"
-                                          size="sm"
-                                          className={`text-xs px-2.5 py-1 rounded-lg border h-8 ${
-                                            alert.is_active
-                                              ? 'border-red-500/20 text-red-450 hover:bg-red-500/10'
-                                              : 'border-emerald-500/20 text-emerald-450 hover:bg-emerald-500/10'
-                                          }`}
-                                          disabled={isExpired}
-                                          title={alert.is_active ? 'Desativar alerta' : 'Ativar alerta'}
-                                        >
-                                          {alert.is_active ? 'Desativar' : 'Ativar'}
-                                        </Button>
-                                        
-                                        <Button
-                                          onClick={() => {
-                                            setEditingAlert(alert);
-                                            setAlertFormTitle(alert.title);
-                                            setAlertFormType(alert.alert_type);
-                                            setAlertFormDescription(alert.description);
-                                            setAlertFormExpirationType(alert.expires_at ? 'scheduled' : 'manual');
-                                            setAlertFormExpiresAt(alert.expires_at ? new Date(new Date(alert.expires_at).getTime() - new Date().getTimezoneOffset() * 60 * 1000).toISOString().slice(0, 16) : '');
-                                            setIsAlertModalOpen(true);
-                                          }}
-                                          variant="ghost"
-                                          size="icon"
-                                          className="h-8 w-8 text-indigo-400 hover:text-indigo-300 hover:bg-indigo-500/10 rounded-lg"
-                                          title="Editar Alerta"
-                                        >
-                                          <Edit2 className="h-3.5 w-3.5" />
-                                        </Button>
+                                    {hasWriteAccess('alerts') && (
+                                      <TableCell className="text-right whitespace-nowrap">
+                                        <div className="flex justify-end items-center gap-1.5">
+                                          <Button
+                                            onClick={() => handleToggleAlertActive(alert.id, alert.is_active)}
+                                            variant="ghost"
+                                            size="sm"
+                                            className={`text-xs px-2.5 py-1 rounded-lg border h-8 ${
+                                              alert.is_active
+                                                ? 'border-red-500/20 text-red-450 hover:bg-red-500/10'
+                                                : 'border-emerald-500/20 text-emerald-450 hover:bg-emerald-500/10'
+                                            }`}
+                                            disabled={isExpired}
+                                            title={alert.is_active ? 'Desativar alerta' : 'Ativar alerta'}
+                                          >
+                                            {alert.is_active ? 'Desativar' : 'Ativar'}
+                                          </Button>
+                                          
+                                          <Button
+                                            onClick={() => {
+                                              setEditingAlert(alert);
+                                              setAlertFormTitle(alert.title);
+                                              setAlertFormType(alert.alert_type);
+                                              setAlertFormDescription(alert.description);
+                                              setAlertFormExpirationType(alert.expires_at ? 'scheduled' : 'manual');
+                                              setAlertFormExpiresAt(alert.expires_at ? new Date(new Date(alert.expires_at).getTime() - new Date().getTimezoneOffset() * 60 * 1000).toISOString().slice(0, 16) : '');
+                                              setIsAlertModalOpen(true);
+                                            }}
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-8 w-8 text-indigo-400 hover:text-indigo-300 hover:bg-indigo-500/10 rounded-lg"
+                                            title="Editar Alerta"
+                                          >
+                                            <Edit2 className="h-3.5 w-3.5" />
+                                          </Button>
 
-                                        <Button
-                                          onClick={() => handleDeleteAlert(alert.id)}
-                                          variant="ghost"
-                                          size="icon"
-                                          className="h-8 w-8 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg"
-                                          title="Excluir Alerta"
-                                        >
-                                          <Trash2 className="h-3.5 w-3.5" />
-                                        </Button>
-                                      </div>
-                                    </TableCell>
+                                          <Button
+                                            onClick={() => handleDeleteAlert(alert.id)}
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-8 w-8 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg"
+                                            title="Excluir Alerta"
+                                          >
+                                            <Trash2 className="h-3.5 w-3.5" />
+                                          </Button>
+                                        </div>
+                                      </TableCell>
+                                    )}
                                   </TableRow>
                                 );
                               })}
@@ -1833,6 +2143,134 @@ export default function AdminPage() {
                                   <TableCell className="font-semibold text-white text-xs whitespace-nowrap">{log.user_email}</TableCell>
                                   <TableCell className="text-indigo-400 font-semibold text-xs whitespace-nowrap">{log.action}</TableCell>
                                   <TableCell className="text-zinc-400 text-xs whitespace-normal break-words min-w-[250px] max-w-xs md:max-w-md lg:max-w-xl" title={log.details}>{log.details}</TableCell>
+                                </TableRow>
+                              );
+                            })}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+
+              {currentUserProfile?.role === 'superadmin' && settingsSubTab === 'users' && (
+                <Card className="bg-zinc-950/60 border-zinc-900 text-white">
+                  <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-900 pb-5">
+                    <div>
+                      <CardTitle className="text-xl font-bold">Gerenciamento de Usuários</CardTitle>
+                      <CardDescription className="text-zinc-500">
+                        Cadastre novos administradores e operadores, defina seus níveis de acesso e permissões personalizadas.
+                      </CardDescription>
+                    </div>
+                    <Button
+                      onClick={handleOpenAddUser}
+                      className="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold gap-1.5 rounded-xl text-xs py-2 px-4 shadow-lg shadow-indigo-600/10 transition-all self-start sm:self-auto"
+                    >
+                      <Plus className="h-4 w-4" />
+                      Novo Usuário
+                    </Button>
+                  </CardHeader>
+                  <CardContent className="pt-6">
+                    {adminUsersList.length === 0 ? (
+                      <div className="text-center py-10 text-zinc-550 text-xs">
+                        Nenhum usuário administrativo cadastrado.
+                      </div>
+                    ) : (
+                      <div className="overflow-x-auto rounded-lg border border-zinc-900">
+                        <Table className="bg-zinc-950/80">
+                          <TableHeader className="bg-zinc-900/50 border-zinc-850">
+                            <TableRow className="hover:bg-zinc-900/20">
+                              <TableHead className="text-zinc-400 font-semibold">Usuário</TableHead>
+                              <TableHead className="text-zinc-400 font-semibold">Cargo</TableHead>
+                              <TableHead className="text-zinc-400 font-semibold">Permissões Permitidas</TableHead>
+                              <TableHead className="text-zinc-400 font-semibold text-right">Ações</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {adminUsersList.map((user) => {
+                              const isSelf = user.email.toLowerCase() === currentUserProfile?.email.toLowerCase();
+                              return (
+                                <TableRow key={user.email} className="hover:bg-zinc-900/30 border-zinc-900">
+                                  <TableCell className="font-bold text-white text-sm whitespace-nowrap">
+                                    <div className="flex items-center gap-1.5">
+                                      <span>{user.email}</span>
+                                      {isSelf && (
+                                        <Badge className="bg-indigo-500/15 text-indigo-400 border border-indigo-500/20 text-[9px] px-1.5 font-medium">Você</Badge>
+                                      )}
+                                    </div>
+                                  </TableCell>
+                                  <TableCell className="whitespace-nowrap">
+                                    {user.role === 'superadmin' ? (
+                                      <Badge className="bg-red-500/15 text-red-400 border border-red-500/20 text-[10px]">Superadmin</Badge>
+                                    ) : (
+                                      <Badge className="bg-zinc-850 text-zinc-400 border border-zinc-800 text-[10px]">Admin</Badge>
+                                    )}
+                                  </TableCell>
+                                  <TableCell>
+                                    <div className="flex flex-wrap gap-1.5">
+                                      {user.role === 'superadmin' ? (
+                                        <Badge className="bg-emerald-500/15 text-emerald-400 border border-emerald-500/20 text-[9px]">Acesso Total</Badge>
+                                      ) : (
+                                        <>
+                                          {(() => {
+                                            const renderedBadges = [
+                                              { key: 'cards', label: 'Cards' },
+                                              { key: 'form', label: 'Formulário' },
+                                              { key: 'rules', label: 'Regras' },
+                                              { key: 'alerts', label: 'Alertas' },
+                                              { key: 'logs', label: 'Logs' }
+                                            ].map(({ key, label }) => {
+                                              const val = user.permissions?.[key];
+                                              if (!val || val === 'none' || val === false) return null;
+                                              const isWrite = val === 'write';
+                                              return (
+                                                <Badge 
+                                                  key={key} 
+                                                  variant="outline" 
+                                                  className={`text-[9px] ${
+                                                    isWrite 
+                                                      ? 'border-indigo-550/30 text-indigo-400 bg-indigo-500/5' 
+                                                      : 'border-zinc-800 text-zinc-400 bg-transparent'
+                                                  }`}
+                                                >
+                                                  {label} {isWrite ? '(Modificar)' : '(Leitura)'}
+                                                </Badge>
+                                              );
+                                            }).filter(Boolean);
+
+                                            return renderedBadges.length > 0 ? renderedBadges : (
+                                              <span className="text-zinc-550 text-[11px]">Nenhum acesso</span>
+                                            );
+                                          })()}
+                                        </>
+                                      )}
+                                    </div>
+                                  </TableCell>
+                                  <TableCell className="text-right">
+                                    <div className="flex justify-end gap-1.5">
+                                      <Button
+                                        onClick={() => handleOpenEditUser(user)}
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-8 w-8 text-indigo-400 hover:text-indigo-300 hover:bg-indigo-500/10 rounded-lg"
+                                        title="Editar permissões"
+                                      >
+                                        <Edit2 className="h-3.5 w-3.5" />
+                                      </Button>
+                                      {!isSelf && (
+                                        <Button
+                                          onClick={() => handleDeleteUser(user.email)}
+                                          variant="ghost"
+                                          size="icon"
+                                          className="h-8 w-8 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg"
+                                          title="Remover usuário"
+                                        >
+                                          <Trash2 className="h-3.5 w-3.5" />
+                                        </Button>
+                                      )}
+                                    </div>
+                                  </TableCell>
                                 </TableRow>
                               );
                             })}
@@ -2073,6 +2511,130 @@ export default function AdminPage() {
                 disabled={isSavingAlert}
               >
                 {isSavingAlert ? 'Salvando...' : 'Salvar Alerta'}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* USER MANAGEMENT ADD/EDIT MODAL */}
+      <Dialog open={isUserModalOpen} onOpenChange={(open) => !open && setIsUserModalOpen(false)}>
+        <DialogContent className="max-w-md w-full bg-zinc-950 border border-zinc-800 text-white rounded-2xl p-6">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold flex items-center gap-2">
+              <Shield className="h-5 w-5 text-indigo-400" />
+              <span>{editingUser ? 'Editar Permissões do Usuário' : 'Cadastrar Novo Administrador'}</span>
+            </DialogTitle>
+            <DialogDescription className="text-zinc-400 text-xs">
+              Configure as credenciais e as permissões de acesso do operador no painel administrativo do Intradetector.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleSaveUser} className="space-y-4 mt-4">
+            {/* Field: Email */}
+            <div className="space-y-1.5">
+              <Label htmlFor="userEmail" className="text-zinc-300 text-xs font-semibold">E-mail de Acesso *</Label>
+              <Input
+                id="userEmail"
+                type="email"
+                value={userFormEmail}
+                onChange={(e) => setUserFormEmail(e.target.value)}
+                placeholder="Ex: operador@empresa.com"
+                className="bg-zinc-900 border-zinc-800 text-white placeholder-zinc-550 focus:border-indigo-500"
+                disabled={!!editingUser}
+                required
+              />
+            </div>
+
+            {/* Field: Password (only when creating) */}
+            {!editingUser && (
+              <div className="space-y-1.5">
+                <Label htmlFor="userPassword" className="text-zinc-300 text-xs font-semibold">Senha Inicial *</Label>
+                <Input
+                  id="userPassword"
+                  type="password"
+                  value={userFormPassword}
+                  onChange={(e) => setUserFormPassword(e.target.value)}
+                  placeholder="Mínimo 6 caracteres"
+                  className="bg-zinc-900 border-zinc-800 text-white placeholder-zinc-550 focus:border-indigo-500"
+                  required
+                />
+              </div>
+            )}
+
+            {/* Field: Role */}
+            <div className="space-y-1.5">
+              <Label htmlFor="userRole" className="text-zinc-300 text-xs font-semibold">Cargo de Acesso *</Label>
+              <Select value={userFormRole} onValueChange={(val: any) => setUserFormRole(val || 'admin')}>
+                <SelectTrigger id="userRole" className="bg-zinc-900 border-zinc-800 text-white">
+                  <SelectValue placeholder="Selecione o cargo" />
+                </SelectTrigger>
+                <SelectContent className="bg-zinc-900 border-zinc-800 text-white">
+                  <SelectItem value="superadmin">Superadmin (Acesso Total + Gravação)</SelectItem>
+                  <SelectItem value="admin">Admin (Acesso Customizado + Apenas Leitura)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Field: Permissions (conditional) */}
+            {userFormRole === 'admin' ? (
+              <div className="space-y-3 p-3.5 bg-zinc-900/40 border border-zinc-900 rounded-xl">
+                <Label className="text-zinc-300 text-xs font-semibold">Níveis de Acesso por Aba *</Label>
+                
+                <div className="space-y-2 pt-1">
+                  {[
+                    { key: 'cards', label: 'Gerenciamento de Cards' },
+                    { key: 'form', label: 'Construtor de Formulários' },
+                    { key: 'rules', label: 'Regras de Criticidade' },
+                    { key: 'alerts', label: 'Gerenciar Alertas' },
+                    { key: 'logs', label: 'Logs de Auditoria' },
+                  ].map(({ key, label }) => {
+                    const currentVal = userFormPermissions[key];
+                    const selectValue = currentVal === 'write' ? 'write' : (currentVal === 'read' || currentVal === true ? 'read' : 'none');
+                    return (
+                      <div key={key} className="flex items-center justify-between py-1.5 border-b border-zinc-900/40 last:border-0 gap-4">
+                        <Label htmlFor={`perm-${key}`} className="text-zinc-400 text-xs font-normal cursor-pointer select-none">{label}</Label>
+                        <Select 
+                          value={selectValue} 
+                          onValueChange={(val) => setUserFormPermissions(prev => ({ ...prev, [key]: val as any }))}
+                        >
+                          <SelectTrigger id={`perm-${key}`} className="w-[160px] bg-zinc-900 border-zinc-850 text-white text-xs h-8 rounded-lg">
+                            <SelectValue placeholder="Selecione" />
+                          </SelectTrigger>
+                          <SelectContent className="bg-zinc-900 border-zinc-850 text-white text-xs">
+                            <SelectItem value="none">Sem Acesso</SelectItem>
+                            <SelectItem value="read">Só Visualizar</SelectItem>
+                            <SelectItem value="write">Modificar Configs</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : (
+              <div className="p-3 bg-indigo-950/20 border border-indigo-900/30 rounded-xl text-indigo-400 text-xs flex gap-2">
+                <Shield className="h-4 w-4 shrink-0 mt-0.5" />
+                <span>Superadministradores têm permissão total de leitura e gravação em todas as funcionalidades automaticamente.</span>
+              </div>
+            )}
+
+            {/* Modal Buttons */}
+            <div className="flex justify-end gap-3 pt-4 border-t border-zinc-800 mt-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsUserModalOpen(false)}
+                className="border-zinc-800 hover:bg-zinc-900 text-zinc-400 hover:text-white"
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="submit"
+                className="bg-indigo-600 hover:bg-indigo-500 text-white font-medium px-6 transition-all"
+                disabled={isSavingUser}
+              >
+                {isSavingUser ? 'Salvando...' : 'Salvar Usuário'}
               </Button>
             </div>
           </form>

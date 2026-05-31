@@ -48,6 +48,27 @@ export default function LoginPage() {
       if (error) {
         toast.error(`Falha no login: ${error.message}`);
       } else {
+        // Verificar autorização do perfil nas configurações
+        try {
+          const { data: adminUsersSetting } = await supabase
+            .from('settings')
+            .select('*')
+            .eq('key', 'admin_users')
+            .single();
+
+          const usersList = adminUsersSetting?.value || [];
+          const profile = usersList.find((u: any) => u.email.toLowerCase() === email.toLowerCase());
+
+          if (usersList.length > 0 && !profile) {
+            await supabase.auth.signOut();
+            toast.error('Acesso negado. Seu perfil de administrador não está cadastrado.');
+            setIsLoading(false);
+            return;
+          }
+        } catch (checkErr) {
+          console.error('Erro ao validar permissões do perfil:', checkErr);
+        }
+
         // Registrar log de auditoria de login
         try {
           await supabase.from('action_logs').insert({
