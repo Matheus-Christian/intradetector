@@ -40,3 +40,25 @@ INSERT INTO public.settings (key, value) VALUES
   }
 ]'::jsonb)
 ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW();
+
+-- 4. Criar tabela de logs de auditoria (action_logs)
+CREATE TABLE IF NOT EXISTS public.action_logs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_email TEXT,
+    action TEXT NOT NULL,
+    details TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
+);
+
+ALTER TABLE public.action_logs ENABLE ROW LEVEL SECURITY;
+
+-- Evitar erros se a política já existir
+DROP POLICY IF EXISTS "Permitir tudo para admin autenticado em logs" ON public.action_logs;
+CREATE POLICY "Permitir tudo para admin autenticado em logs" 
+ON public.action_logs FOR ALL 
+TO authenticated 
+USING (true) 
+WITH CHECK (true);
+
+-- Habilitar Realtime para action_logs
+alter publication supabase_realtime add table public.action_logs;

@@ -50,7 +50,8 @@ import {
   Filter,
   AlertCircle,
   Layers,
-  FormInput
+  FormInput,
+  Activity
 } from 'lucide-react';
 import Link from 'next/link';
 import IntradetectorLogo from '@/components/intradetector-logo';
@@ -113,7 +114,8 @@ export default function AdminPage() {
   const [labelWarning, setLabelWarning] = useState<string>('Instabilidade');
   const [labelCritical, setLabelCritical] = useState<string>('Queda total');
   const [isSavingThresholds, setIsSavingThresholds] = useState(false);
-  const [settingsSubTab, setSettingsSubTab] = useState<'cards' | 'form' | 'rules'>('cards');
+  const [settingsSubTab, setSettingsSubTab] = useState<'cards' | 'form' | 'rules' | 'logs'>('cards');
+  const [actionLogs, setActionLogs] = useState<any[]>([]);
 
   useEffect(() => {
     setIsMounted(true);
@@ -194,13 +196,42 @@ export default function AdminPage() {
         setChartWindowHours(thresholds.chartWindowHours || 24);
         setLabelNormal(thresholds.labelNormal || 'Operando');
         setLabelWarning(thresholds.labelWarning || 'Instabilidade');
-        setLabelCritical(thresholds.labelCritical || 'Queda total');
+      }
+
+      // 5. Fetch Action Logs
+      const { data: logsData, error: logsError } = await supabase
+        .from('action_logs')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(100);
+
+      if (logsError && logsError.code !== 'PGRST116') {
+        console.warn('Tabela action_logs não encontrada ou não migrada ainda.');
+      } else if (logsData) {
+        setActionLogs(logsData);
       }
     } catch (err: any) {
       console.error(err);
       toast.error(`Erro ao carregar dados: ${err.message}`);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const logAction = async (action: string, details: string) => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const email = session?.user?.email || 'Sistema';
+      
+      await supabase
+        .from('action_logs')
+        .insert({
+          user_email: email,
+          action,
+          details
+        });
+    } catch (err) {
+      console.error('Falha de log:', err);
     }
   };
 
@@ -218,6 +249,7 @@ export default function AdminPage() {
       const { error } = await supabase.from('reports').delete().eq('id', id);
       if (error) throw error;
 
+      await logAction('Excluir relato', `ID do relato deletado: ${id}`);
       toast.success('Relato excluído com sucesso.');
       setReports((prev) => prev.filter((r) => r.id !== id));
     } catch (err: any) {
@@ -264,6 +296,7 @@ export default function AdminPage() {
       const { error } = await supabase.from('services').delete().eq('id', id);
       if (error) throw error;
 
+      await logAction('Excluir card de serviço', `ID do serviço: ${id}`);
       toast.success('Serviço excluído com sucesso!');
       loadData();
     } catch (err: any) {
@@ -298,6 +331,7 @@ export default function AdminPage() {
           .eq('id', editingService.id);
         
         if (error) throw error;
+        await logAction('Editar card de serviço', `Serviço: ${serviceData.name} (${serviceData.category})`);
         toast.success('Serviço atualizado com sucesso!');
       } else {
         // Add New
@@ -306,6 +340,7 @@ export default function AdminPage() {
           .insert(serviceData);
         
         if (error) throw error;
+        await logAction('Criar card de serviço', `Serviço: ${serviceData.name} (${serviceData.category})`);
         toast.success('Novo serviço adicionado!');
       }
 
@@ -345,6 +380,7 @@ export default function AdminPage() {
         });
 
       if (error) throw error;
+      await logAction('Atualizar Construtor de Formulário', `Campos: ${cleanedSchema.map(f => f.label).join(', ')}`);
       toast.success('Esquema do formulário salvo e sincronizado!');
     } catch (err: any) {
       toast.error(`Erro ao salvar: ${err.message}`);
@@ -382,6 +418,7 @@ export default function AdminPage() {
         });
 
       if (error) throw error;
+      await logAction('Atualizar Regras de Criticidade', `Crítico: ${thresholdCritical}, Alerta: ${thresholdWarning}, Janela: ${thresholdWindow}m, Janela Gráfico: ${chartWindowHours}h`);
       toast.success('Regras de cálculo atualizadas! O site público usará as novas regras instantaneamente.');
     } catch (err: any) {
       toast.error(`Erro ao salvar: ${err.message}`);
@@ -922,6 +959,18 @@ export default function AdminPage() {
                 <Sliders className="h-4 w-4" />
                 Regras de Criticidade
               </Button>
+              <Button
+                onClick={() => setSettingsSubTab('logs')}
+                variant="ghost"
+                className={`w-full justify-start rounded-xl text-xs font-semibold px-4 py-3 transition-all gap-2 ${
+                  settingsSubTab === 'logs'
+                    ? 'bg-indigo-600/10 text-indigo-400 border border-indigo-500/20 hover:bg-indigo-600/15'
+                    : 'text-zinc-400 hover:text-white hover:bg-zinc-900/40 border border-transparent'
+                }`}
+              >
+                <Activity className="h-4 w-4" />
+                Logs de Auditoria
+              </Button>
             </aside>
 
             {/* CONTENT AREA */}
@@ -1176,6 +1225,50 @@ export default function AdminPage() {
                         </Button>
                       </div>
                     </form>
+                  </CardContent>
+                </Card>
+              )}
+
+              {settingsSubTab === 'logs' && (
+                <Card className="bg-zinc-950/60 border-zinc-900 text-white">
+                  <CardHeader>
+                    <CardTitle className="text-xl font-bold">Logs de Auditoria</CardTitle>
+                    <CardDescription className="text-zinc-500">
+                      Histórico de ações realizadas por administradores no painel em tempo real.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {actionLogs.length === 0 ? (
+                      <div className="text-center py-12 text-zinc-550 text-xs">
+                        Nenhum log registrado ou tabela de auditoria não configurada.
+                      </div>
+                    ) : (
+                      <div className="overflow-x-auto rounded-lg border border-zinc-900">
+                        <Table className="bg-zinc-950/80">
+                          <TableHeader className="bg-zinc-900/50 border-zinc-850">
+                            <TableRow className="hover:bg-zinc-900/20">
+                              <TableHead className="text-zinc-400 font-semibold">Data</TableHead>
+                              <TableHead className="text-zinc-400 font-semibold">Usuário</TableHead>
+                              <TableHead className="text-zinc-400 font-semibold">Ação</TableHead>
+                              <TableHead className="text-zinc-400 font-semibold">Detalhes</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {actionLogs.map((log) => {
+                              const dateFormatted = new Date(log.created_at).toLocaleString('pt-BR');
+                              return (
+                                <TableRow key={log.id} className="hover:bg-zinc-900/30 border-zinc-900">
+                                  <TableCell className="text-zinc-300 text-xs whitespace-nowrap">{dateFormatted}</TableCell>
+                                  <TableCell className="font-semibold text-white text-xs">{log.user_email}</TableCell>
+                                  <TableCell className="text-indigo-400 font-semibold text-xs">{log.action}</TableCell>
+                                  <TableCell className="text-zinc-400 text-xs" title={log.details}>{log.details}</TableCell>
+                                </TableRow>
+                              );
+                            })}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               )}

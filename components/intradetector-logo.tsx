@@ -27,7 +27,7 @@ export default function IntradetectorLogo({
       {/* Logotype — Barlow Condensed Bold */}
       <span
         className={`${logo} font-extrabold tracking-tight`}
-        style={{ fontFamily: 'var(--font-barlow-condensed), var(--font-barlow), sans-serif' }}
+        style={{ fontFamily: 'var(--font-sans), sans-serif' }}
       >
         <span className="text-red-500">Intra</span>
         <span className="text-white">detector</span>
@@ -37,7 +37,7 @@ export default function IntradetectorLogo({
       {showTagline && (
         <span
           className={`${tagline} text-zinc-500 font-medium tracking-wide mt-0.5 leading-none`}
-          style={{ fontFamily: 'var(--font-barlow), sans-serif' }}
+          style={{ fontFamily: 'var(--font-sans), sans-serif' }}
         >
           by Sebratel
         </span>

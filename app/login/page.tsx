@@ -96,7 +96,7 @@ export default function LoginPage() {
                 <Input
                   id="email"
                   type="email"
-                  placeholder="admin@intradetector.com"
+                  placeholder="ex: admin@empresa.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="bg-zinc-900 border-zinc-800 text-white placeholder-zinc-500 focus:border-indigo-500 focus:ring-indigo-500 transition-colors"
@@ -126,7 +126,7 @@ export default function LoginPage() {
               </div>
             </CardContent>
             
-            <CardFooter className="flex flex-col gap-3">
+            <CardFooter className="flex flex-col gap-3 pt-8 mt-4">
               <Button 
                 type="submit" 
                 className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-medium shadow-lg shadow-indigo-600/20 py-2.5 transition-all active:scale-[0.98]"
@@ -142,7 +142,7 @@ export default function LoginPage() {
                 )}
               </Button>
               <div className="text-center text-xs text-zinc-500 mt-2">
-                MVP Protegido por Supabase Auth.
+                Protegido por Supabase Auth.
               </div>
             </CardFooter>
           </form>
