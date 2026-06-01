@@ -129,7 +129,8 @@ export default function HomePage() {
   const isAutoAlertTriggered = useMemo(() => {
     if (!alertConfig || !alertConfig.autoEnabled) return false;
     
-    const hasActiveManual = activeAlert !== null;
+    // Ignorar alerta do tipo automático ao validar se existe alerta manual ativo
+    const hasActiveManual = activeAlert !== null && activeAlert.alert_type !== 'Detecção Automática';
     if (hasActiveManual) return false;
 
     const minReports = alertConfig.autoMinReports ?? 5;
@@ -211,6 +212,48 @@ export default function HomePage() {
 
     return () => clearTimeout(timer);
   }, [isAlertDetailOpen, autoCloseInterval]);
+
+  // Sincronizar alertas automáticos com o banco de dados
+  useEffect(() => {
+    if (!alertConfig || !alertConfig.autoEnabled) return;
+
+    // Apenas sincroniza se não houver alerta manual ativo
+    const hasActiveManual = activeAlert !== null && activeAlert.alert_type !== 'Detecção Automática';
+    if (hasActiveManual) return;
+
+    const syncAutoAlert = async () => {
+      try {
+        if (isAutoAlertTriggered) {
+          // Se disparado, registra/ativa o alerta automático de forma atômica
+          const title = alertConfig.autoTitle || 'Detecção Automática de Instabilidade';
+          const description = alertConfig.autoDescription || 'Alto volume de relatos detectado na rede pública.';
+          await supabase.rpc('manage_auto_alert', {
+            trigger_active: true,
+            alert_title: title,
+            alert_desc: description
+          });
+        } else {
+          // Se normalizado, desativa qualquer alerta automático ativo na tabela
+          const hasActiveAutoInDb = networkAlerts.some((a: any) => {
+            const isExpired = a.expires_at && new Date(a.expires_at).getTime() < Date.now();
+            return a.is_active && !isExpired && a.alert_type === 'Detecção Automática';
+          });
+          
+          if (hasActiveAutoInDb) {
+            await supabase.rpc('manage_auto_alert', {
+              trigger_active: false,
+              alert_title: '',
+              alert_desc: ''
+            });
+          }
+        }
+      } catch (err) {
+        console.error('Erro ao sincronizar alerta automático:', err);
+      }
+    };
+
+    syncAutoAlert();
+  }, [isAutoAlertTriggered, alertConfig, activeAlert, networkAlerts, supabase]);
 
   // Fetch initial data
   const fetchData = async () => {

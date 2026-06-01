@@ -206,6 +206,15 @@ export default function AdminPage() {
   const [alertFormExpirationType, setAlertFormExpirationType] = useState<'manual' | 'scheduled'>('manual');
   const [alertFormExpiresAt, setAlertFormExpiresAt] = useState('');
   const [isSavingAlert, setIsSavingAlert] = useState(false);
+  
+  // --- ANALYTICS VIEW SUBTAB & REPORT GENERATION STATES ---
+  const [analyticsSubTab, setAnalyticsSubTab] = useState<'alerts' | 'custom'>('alerts');
+  const [selectedAlertIds, setSelectedAlertIds] = useState<string[]>([]);
+  const [isAlertsReportGenerated, setIsAlertsReportGenerated] = useState<boolean>(false);
+  const [reportFilterService, setReportFilterService] = useState<string>('all');
+  const [reportFilterIssue, setReportFilterIssue] = useState<string>('all');
+  const [reportFilterRegion, setReportFilterRegion] = useState<string>('all');
+  const [reportFilterConnection, setReportFilterConnection] = useState<string>('all');
 
   // --- SERVICE CATEGORIES STATE ---
   const [categoriesList, setCategoriesList] = useState<any[]>([]);
@@ -1280,6 +1289,103 @@ export default function AdminPage() {
     }
   }, [filteredReports, filterTimeRange, customStartDate, customEndDate]);
 
+  // --- ALERT ANALYTICS MEMOIZED SELECTORS ---
+  // 1. Calculate reports count per alert during its active window
+  const reportsCountPerAlert = useMemo(() => {
+    const counts: Record<string, number> = {};
+    networkAlerts.forEach(alert => {
+      const start = new Date(alert.created_at).getTime();
+      let end = Date.now();
+      if (alert.expires_at) {
+        end = new Date(alert.expires_at).getTime();
+      } else if (!alert.is_active) {
+        end = new Date(alert.updated_at || alert.created_at).getTime();
+      }
+      
+      const count = reports.filter(r => {
+        const rTime = new Date(r.created_at).getTime();
+        return rTime >= start && rTime <= end;
+      }).length;
+      
+      counts[alert.id] = count;
+    });
+    return counts;
+  }, [networkAlerts, reports]);
+
+  // 2. Memoize selected alerts objects
+  const selectedAlerts = useMemo(() => {
+    return networkAlerts.filter(a => selectedAlertIds.includes(a.id));
+  }, [networkAlerts, selectedAlertIds]);
+
+  // 3. Aggregate all reports from selected alerts
+  const reportsInSelectedAlerts = useMemo(() => {
+    if (selectedAlerts.length === 0) return [];
+    
+    return reports.filter(r => {
+      const rTime = new Date(r.created_at).getTime();
+      return selectedAlerts.some(alert => {
+        const start = new Date(alert.created_at).getTime();
+        let end = Date.now();
+        if (alert.expires_at) {
+          end = new Date(alert.expires_at).getTime();
+        } else if (!alert.is_active) {
+          end = new Date(alert.updated_at || alert.created_at).getTime();
+        }
+        return rTime >= start && rTime <= end;
+      });
+    });
+  }, [reports, selectedAlerts]);
+
+  // 3. Filter reports within selected alert report view
+  const filteredReportsInReportView = useMemo(() => {
+    return reportsInSelectedAlerts.filter(r => {
+      if (reportFilterService !== 'all' && r.service_id !== reportFilterService) return false;
+      
+      if (reportFilterIssue !== 'all') {
+        const issueVal = r.issue_type ?? r.custom_fields?.issue_type;
+        if (issueVal !== reportFilterIssue) return false;
+      }
+      
+      if (reportFilterRegion !== 'all') {
+        const regionVal = r.region ?? r.custom_fields?.region;
+        if (regionVal !== reportFilterRegion) return false;
+      }
+
+      if (reportFilterConnection !== 'all') {
+        const connVal = r.connection_type ?? r.custom_fields?.connection_type;
+        if (connVal !== reportFilterConnection) return false;
+      }
+      
+      return true;
+    });
+  }, [reportsInSelectedAlerts, reportFilterService, reportFilterIssue, reportFilterRegion, reportFilterConnection]);
+
+  // 4. Bar chart data for top services in selected alerts reports
+  const selectedAlertsBarChartData = useMemo(() => {
+    const counts: Record<string, number> = {};
+    filteredReportsInReportView.forEach(r => {
+      const svcName = r.services?.name || services.find(s => s.id === r.service_id)?.name || 'Serviço Excluído';
+      counts[svcName] = (counts[svcName] || 0) + 1;
+    });
+    return Object.entries(counts)
+      .map(([name, count]) => ({ name, relatos: count }))
+      .sort((a, b) => b.relatos - a.relatos)
+      .slice(0, 5);
+  }, [services, filteredReportsInReportView]);
+
+  // 5. Horizontal bar chart data for top issues in selected alerts reports
+  const selectedAlertsIssuesChartData = useMemo(() => {
+    const counts: Record<string, number> = {};
+    filteredReportsInReportView.forEach(r => {
+      const issue = r.issue_type ?? r.custom_fields?.issue_type ?? 'Outros';
+      counts[issue] = (counts[issue] || 0) + 1;
+    });
+    return Object.entries(counts)
+      .map(([name, count]) => ({ name, relatos: count }))
+      .sort((a, b) => b.relatos - a.relatos)
+      .slice(0, 5);
+  }, [filteredReportsInReportView]);
+
   if (!isAuthenticated || isLoading) {
     return (
       <div className="min-h-screen bg-black flex flex-col items-center justify-center gap-3">
@@ -1461,337 +1567,796 @@ export default function AdminPage() {
 
         {/* TAB 2: ANALYTICAL CHARTS & FILTERS */}
         {activeTab === 'analytics' && (
-          <div className="space-y-6">
-            {/* INTERACTIVE FILTER BAR */}
-            <Card className="bg-zinc-950/60 border-zinc-900 text-white">
-              <CardHeader className="py-4 border-b border-zinc-900 flex flex-row items-center gap-2">
-                <Filter className="h-4 w-4 text-indigo-400" />
-                <CardTitle className="text-sm font-bold uppercase tracking-wider text-zinc-300">Filtros Analíticos</CardTitle>
-              </CardHeader>
-              <CardContent className="p-4 space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4">
-                  {/* Filter: Service */}
-                  <div className="space-y-1.5">
-                    <Label className="text-xs text-zinc-400 font-semibold">Serviço</Label>
-                    <Select value={filterService} onValueChange={(val) => setFilterService(val || 'all')}>
-                      <SelectTrigger className="bg-zinc-900 border-zinc-800 text-xs h-9">
-                        <SelectValue placeholder="Selecione" />
-                      </SelectTrigger>
-                      <SelectContent className="bg-zinc-900 border-zinc-800 text-white">
-                        <SelectItem value="all">Todos os Serviços</SelectItem>
-                        {services.map((s) => (
-                          <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-start relative z-10 animate-in fade-in duration-300">
+            {/* SIDEBAR NAVIGATION MENU */}
+            <aside className="lg:col-span-1 flex flex-col gap-1.5 bg-zinc-950/60 p-4 rounded-2xl border border-zinc-900 lg:sticky lg:top-24">
+              <div className="px-2 py-1.5 mb-2">
+                <span className="text-[10px] uppercase font-bold tracking-widest text-zinc-500">Menu de Análise</span>
+              </div>
+              <Button
+                onClick={() => {
+                  setAnalyticsSubTab('alerts');
+                  setIsAlertsReportGenerated(false);
+                }}
+                variant="ghost"
+                className={`w-full justify-start rounded-xl text-xs font-semibold gap-2 py-5 px-4 transition-all duration-200 ${
+                  analyticsSubTab === 'alerts'
+                    ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/10'
+                    : 'text-zinc-400 hover:text-white hover:bg-zinc-900/50'
+                }`}
+              >
+                <Activity className="h-4 w-4" />
+                Análise por Alertas
+              </Button>
+              <Button
+                onClick={() => setAnalyticsSubTab('custom')}
+                variant="ghost"
+                className={`w-full justify-start rounded-xl text-xs font-semibold gap-2 py-5 px-4 transition-all duration-200 ${
+                  analyticsSubTab === 'custom'
+                    ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/10'
+                    : 'text-zinc-400 hover:text-white hover:bg-zinc-900/50'
+                }`}
+              >
+                <Sliders className="h-4 w-4" />
+                Análise personalizada
+              </Button>
+            </aside>
 
-                  {/* Dynamic Filters from Schema */}
-                  {formSchema.filter(f => f.type === 'select').slice(0, 3).map(field => (
-                    <div key={field.id} className="space-y-1.5">
-                      <Label className="text-xs text-zinc-400 font-semibold">{field.label}</Label>
-                      <Select 
-                        value={dynamicFilters[field.id] || 'all'} 
-                        onValueChange={(val) => setDynamicFilters(prev => ({ ...prev, [field.id]: val || 'all' }))}
-                      >
-                        <SelectTrigger className="bg-zinc-900 border-zinc-800 text-xs h-9">
-                          <SelectValue placeholder="Selecione" />
-                        </SelectTrigger>
-                        <SelectContent className="bg-zinc-900 border-zinc-800 text-white">
-                          <SelectItem value="all">Todas as opções</SelectItem>
-                          {field.options?.map((opt) => (
-                            <SelectItem key={opt} value={opt}>{opt}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  ))}
-
-                  {/* Filter: Time Range */}
-                  <div className="space-y-1.5">
-                    <Label className="text-xs text-zinc-400 font-semibold">Período</Label>
-                    <Select value={filterTimeRange} onValueChange={(val) => setFilterTimeRange(val || '24h')}>
-                      <SelectTrigger className="bg-zinc-900 border-zinc-800 text-xs h-9">
-                        <SelectValue placeholder="Selecione" />
-                      </SelectTrigger>
-                      <SelectContent className="bg-zinc-900 border-zinc-800 text-white">
-                        <SelectItem value="24h">Últimas 24 Horas</SelectItem>
-                        <SelectItem value="7d">Últimos 7 Dias</SelectItem>
-                        <SelectItem value="30d">Últimos 30 Dias</SelectItem>
-                        <SelectItem value="all">Todo o Histórico</SelectItem>
-                        <SelectItem value="custom">Personalizado</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                {/* Conditional Custom Date/Time Selectors */}
-                {filterTimeRange === 'custom' && (
-                  <div className="flex flex-col sm:flex-row gap-4 pt-4 border-t border-zinc-900/60 animate-in fade-in-50 duration-200">
-                    <div className="space-y-1.5 flex-1">
-                      <Label className="text-xs text-zinc-400 font-semibold">Data e Hora Inicial (De)</Label>
-                      <Input
-                        type="datetime-local"
-                        value={customStartDate}
-                        onChange={(e) => setCustomStartDate(e.target.value)}
-                        className="bg-zinc-900 border-zinc-800 text-white text-xs h-9 focus:border-indigo-500"
-                      />
-                    </div>
-                    <div className="space-y-1.5 flex-1">
-                      <Label className="text-xs text-zinc-400 font-semibold">Data e Hora Final (Até)</Label>
-                      <Input
-                        type="datetime-local"
-                        value={customEndDate}
-                        onChange={(e) => setCustomEndDate(e.target.value)}
-                        className="bg-zinc-900 border-zinc-800 text-white text-xs h-9 focus:border-indigo-500"
-                      />
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* CHARTS CONTAINER */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Primary Dynamic Graph (Bar, Line, Area) */}
-              <Card className="bg-zinc-950/60 border-zinc-900 text-white lg:col-span-2">
-                <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2">
-                  <div>
-                    <CardTitle className="text-lg font-bold">Volume de Instabilidade</CardTitle>
-                    <CardDescription className="text-zinc-500">
-                      Visualização reativa contendo {filteredReports.length} relatos filtrados.
-                    </CardDescription>
-                  </div>
-                  {/* CHART TOGGLE BUTTONS */}
-                  <div className="flex bg-zinc-900 p-1 rounded-xl border border-zinc-800">
-                    <Button
-                      onClick={() => setChartType('bar')}
-                      variant="ghost"
-                      className={`h-8 px-3 rounded-lg text-xs font-semibold ${
-                        chartType === 'bar' ? 'bg-indigo-600 text-white' : 'text-zinc-400 hover:text-white'
-                      }`}
-                    >
-                      Barras
-                    </Button>
-                    <Button
-                      onClick={() => setChartType('line')}
-                      variant="ghost"
-                      className={`h-8 px-3 rounded-lg text-xs font-semibold ${
-                        chartType === 'line' ? 'bg-indigo-600 text-white' : 'text-zinc-400 hover:text-white'
-                      }`}
-                    >
-                      Linha
-                    </Button>
-                    <Button
-                      onClick={() => setChartType('area')}
-                      variant="ghost"
-                      className={`h-8 px-3 rounded-lg text-xs font-semibold ${
-                        chartType === 'area' ? 'bg-indigo-600 text-white' : 'text-zinc-400 hover:text-white'
-                      }`}
-                    >
-                      Área
-                    </Button>
-                  </div>
-                </CardHeader>
-                <CardContent className="h-[350px] min-h-[300px] pt-4">
-                  {isMounted && filteredReports.length > 0 ? (
-                    <ResponsiveContainer width="100%" height="100%">
-                      {chartType === 'bar' ? (
-                        <BarChart data={barChartData} margin={{ top: 20, right: 10, left: -20, bottom: 20 }}>
-                          <XAxis dataKey="name" stroke="#888888" fontSize={11} tickLine={false} axisLine={false} />
-                          <YAxis stroke="#888888" fontSize={11} tickLine={false} axisLine={false} allowDecimals={false} />
-                          <Tooltip
-                            cursor={{ fill: 'rgba(255,255,255,0.03)' }}
-                            contentStyle={{ backgroundColor: '#09090b', borderColor: '#18181b', borderRadius: '12px' }}
-                            labelStyle={{ color: '#fff', fontWeight: 'bold' }}
-                          />
-                          <Bar dataKey="relatos" fill="#6366f1" radius={[6, 6, 0, 0]} />
-                        </BarChart>
-                      ) : chartType === 'line' ? (
-                        <LineChart data={timelineData} margin={{ top: 20, right: 15, left: -20, bottom: 20 }}>
-                          <XAxis dataKey="label" stroke="#888888" fontSize={10} tickLine={false} axisLine={false} />
-                          <YAxis stroke="#888888" fontSize={10} tickLine={false} axisLine={false} allowDecimals={false} />
-                          <Tooltip
-                            contentStyle={{ backgroundColor: '#09090b', borderColor: '#18181b', borderRadius: '12px' }}
-                            labelStyle={{ color: '#fff', fontWeight: 'bold' }}
-                          />
-                          <Line type="monotone" dataKey="relatos" stroke="#6366f1" strokeWidth={3} dot={{ fill: '#6366f1', strokeWidth: 1, r: 4 }} activeDot={{ r: 6 }} />
-                        </LineChart>
-                      ) : (
-                        <AreaChart data={timelineData} margin={{ top: 20, right: 15, left: -20, bottom: 20 }}>
-                          <defs>
-                            <linearGradient id="colorRelatos" x1="0" y1="0" x2="0" y2="1">
-                              <stop offset="5%" stopColor="#6366f1" stopOpacity={0.4}/>
-                              <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
-                            </linearGradient>
-                          </defs>
-                          <XAxis dataKey="label" stroke="#888888" fontSize={10} tickLine={false} axisLine={false} />
-                          <YAxis stroke="#888888" fontSize={10} tickLine={false} axisLine={false} allowDecimals={false} />
-                          <Tooltip
-                            contentStyle={{ backgroundColor: '#09090b', borderColor: '#18181b', borderRadius: '12px' }}
-                            labelStyle={{ color: '#fff', fontWeight: 'bold' }}
-                          />
-                          <Area type="monotone" dataKey="relatos" stroke="#6366f1" strokeWidth={2.5} fillOpacity={1} fill="url(#colorRelatos)" />
-                        </AreaChart>
-                      )}
-                    </ResponsiveContainer>
-                  ) : (
-                    <div className="h-full flex flex-col items-center justify-center text-zinc-500 gap-2">
-                      <AlertCircle className="h-8 w-8 text-zinc-600" />
-                      <span className="text-xs">Nenhum relato atende aos filtros atuais.</span>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-
-              {/* Resolved vs Unresolved Proportion */}
-              <Card className="bg-zinc-950/60 border-zinc-900 text-white">
-                <CardHeader>
-                  <CardTitle className="text-lg font-bold">Reboot Eficácia</CardTitle>
-                  <CardDescription className="text-zinc-500">Relatos resolvidos ou não pós reboot no escopo filtrado.</CardDescription>
-                </CardHeader>
-                <CardContent className="h-[350px] min-h-[300px] flex flex-col justify-between pt-4">
-                  {isMounted && filteredReports.length > 0 ? (
-                    <>
-                      <div className="flex-1 h-60">
-                        <ResponsiveContainer width="100%" height="100%">
-                          <PieChart>
-                            <Pie
-                              data={pieChartData}
-                              cx="50%"
-                              cy="45%"
-                              innerRadius={55}
-                              outerRadius={75}
-                              paddingAngle={4}
-                              dataKey="value"
-                            >
-                              {pieChartData.map((entry, index) => (
-                                <Cell key={`cell-${index}`} fill={entry.color} />
+            {/* CONTENT AREA */}
+            <div className="lg:col-span-3 space-y-6">
+              {analyticsSubTab === 'custom' ? (
+                <div className="space-y-6 animate-in fade-in-50 duration-300">
+                  {/* INTERACTIVE FILTER BAR */}
+                  <Card className="bg-zinc-950/60 border-zinc-900 text-white">
+                    <CardHeader className="py-4 border-b border-zinc-900 flex flex-row items-center gap-2">
+                      <Filter className="h-4 w-4 text-indigo-400" />
+                      <CardTitle className="text-sm font-bold uppercase tracking-wider text-zinc-300">Filtros Analíticos</CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-4 space-y-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4">
+                        {/* Filter: Service */}
+                        <div className="space-y-1.5">
+                          <Label className="text-xs text-zinc-400 font-semibold">Serviço</Label>
+                          <Select value={filterService} onValueChange={(val) => setFilterService(val || 'all')}>
+                            <SelectTrigger className="bg-zinc-900 border-zinc-800 text-xs h-9">
+                              <SelectValue placeholder="Selecione" />
+                            </SelectTrigger>
+                            <SelectContent className="bg-zinc-900 border-zinc-800 text-white">
+                              <SelectItem value="all">Todos os Serviços</SelectItem>
+                              {services.map((s) => (
+                                <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
                               ))}
-                            </Pie>
-                            <Tooltip
-                              contentStyle={{ backgroundColor: '#09090b', borderColor: '#18181b', borderRadius: '12px' }}
-                            />
-                            <Legend verticalAlign="bottom" height={36} iconType="circle" />
-                          </PieChart>
-                        </ResponsiveContainer>
-                      </div>
-                      <div className="text-center text-[10px] text-zinc-500">
-                        Proporção calculada para {filteredReports.length} relatos.
-                      </div>
-                    </>
-                  ) : (
-                    <div className="h-full flex items-center justify-center text-zinc-500 text-xs">
-                      Sem dados de proporção.
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
+                            </SelectContent>
+                          </Select>
+                        </div>
 
-            {/* LIST OF FILTERED REPORTS */}
-            <Card className="bg-zinc-950/60 border-zinc-900 text-white mt-6">
-              <CardHeader className="flex flex-row items-center justify-between">
-                <div>
-                  <CardTitle className="text-lg font-bold">Relatos Filtrados</CardTitle>
-                  <CardDescription className="text-zinc-500">
-                    Lista contendo os {filteredReports.length} relatos que correspondem aos filtros selecionados acima.
-                  </CardDescription>
-                </div>
-              </CardHeader>
-              <CardContent>
-                {filteredReports.length === 0 ? (
-                  <div className="text-center py-12 text-zinc-500">
-                    Nenhum relato atende aos filtros selecionados.
+                        {/* Dynamic Filters from Schema */}
+                        {formSchema.filter(f => f.type === 'select').slice(0, 3).map(field => (
+                          <div key={field.id} className="space-y-1.5">
+                            <Label className="text-xs text-zinc-400 font-semibold">{field.label}</Label>
+                            <Select 
+                              value={dynamicFilters[field.id] || 'all'} 
+                              onValueChange={(val) => setDynamicFilters(prev => ({ ...prev, [field.id]: val || 'all' }))}
+                            >
+                              <SelectTrigger className="bg-zinc-900 border-zinc-800 text-xs h-9">
+                                <SelectValue placeholder="Selecione" />
+                              </SelectTrigger>
+                              <SelectContent className="bg-zinc-900 border-zinc-800 text-white">
+                                <SelectItem value="all">Todas as opções</SelectItem>
+                                {field.options?.map((opt) => (
+                                  <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        ))}
+
+                        {/* Filter: Time Range */}
+                        <div className="space-y-1.5">
+                          <Label className="text-xs text-zinc-400 font-semibold">Período</Label>
+                          <Select value={filterTimeRange} onValueChange={(val) => setFilterTimeRange(val || '24h')}>
+                            <SelectTrigger className="bg-zinc-900 border-zinc-800 text-xs h-9">
+                              <SelectValue placeholder="Selecione" />
+                            </SelectTrigger>
+                            <SelectContent className="bg-zinc-900 border-zinc-800 text-white">
+                              <SelectItem value="24h">Últimas 24 Horas</SelectItem>
+                              <SelectItem value="7d">Últimos 7 Dias</SelectItem>
+                              <SelectItem value="30d">Últimos 30 Dias</SelectItem>
+                              <SelectItem value="all">Todo o Histórico</SelectItem>
+                              <SelectItem value="custom">Personalizado</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+
+                      {/* Conditional Custom Date/Time Selectors */}
+                      {filterTimeRange === 'custom' && (
+                        <div className="flex flex-col sm:flex-row gap-4 pt-4 border-t border-zinc-900/60 animate-in fade-in-50 duration-200">
+                          <div className="space-y-1.5 flex-1">
+                            <Label className="text-xs text-zinc-400 font-semibold">Data e Hora Inicial (De)</Label>
+                            <Input
+                              type="datetime-local"
+                              value={customStartDate}
+                              onChange={(e) => setCustomStartDate(e.target.value)}
+                              className="bg-zinc-900 border-zinc-800 text-white text-xs h-9 focus:border-indigo-500"
+                            />
+                          </div>
+                          <div className="space-y-1.5 flex-1">
+                            <Label className="text-xs text-zinc-400 font-semibold">Data e Hora Final (Até)</Label>
+                            <Input
+                              type="datetime-local"
+                              value={customEndDate}
+                              onChange={(e) => setCustomEndDate(e.target.value)}
+                              className="bg-zinc-900 border-zinc-800 text-white text-xs h-9 focus:border-indigo-500"
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  {/* CHARTS CONTAINER */}
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    {/* Primary Dynamic Graph (Bar, Line, Area) */}
+                    <Card className="bg-zinc-950/60 border-zinc-900 text-white lg:col-span-2">
+                      <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2">
+                        <div>
+                          <CardTitle className="text-lg font-bold">Volume de Instabilidade</CardTitle>
+                          <CardDescription className="text-zinc-500">
+                            Visualização reativa contendo {filteredReports.length} relatos filtrados.
+                          </CardDescription>
+                        </div>
+                        {/* CHART TOGGLE BUTTONS */}
+                        <div className="flex bg-zinc-900 p-1 rounded-xl border border-zinc-800">
+                          <Button
+                            onClick={() => setChartType('bar')}
+                            variant="ghost"
+                            className={`h-8 px-3 rounded-lg text-xs font-semibold ${
+                              chartType === 'bar' ? 'bg-indigo-600 text-white' : 'text-zinc-400 hover:text-white'
+                            }`}
+                          >
+                            Barras
+                          </Button>
+                          <Button
+                            onClick={() => setChartType('line')}
+                            variant="ghost"
+                            className={`h-8 px-3 rounded-lg text-xs font-semibold ${
+                              chartType === 'line' ? 'bg-indigo-600 text-white' : 'text-zinc-400 hover:text-white'
+                            }`}
+                          >
+                            Linha
+                          </Button>
+                          <Button
+                            onClick={() => setChartType('area')}
+                            variant="ghost"
+                            className={`h-8 px-3 rounded-lg text-xs font-semibold ${
+                              chartType === 'area' ? 'bg-indigo-600 text-white' : 'text-zinc-400 hover:text-white'
+                            }`}
+                          >
+                            Área
+                          </Button>
+                        </div>
+                      </CardHeader>
+                      <CardContent className="h-[350px] min-h-[300px] pt-4">
+                        {isMounted && filteredReports.length > 0 ? (
+                          <ResponsiveContainer width="100%" height="100%">
+                            {chartType === 'bar' ? (
+                              <BarChart data={barChartData} margin={{ top: 20, right: 10, left: -20, bottom: 20 }}>
+                                <XAxis dataKey="name" stroke="#888888" fontSize={11} tickLine={false} axisLine={false} />
+                                <YAxis stroke="#888888" fontSize={11} tickLine={false} axisLine={false} allowDecimals={false} />
+                                <Tooltip
+                                  cursor={{ fill: 'rgba(255,255,255,0.03)' }}
+                                  contentStyle={{ backgroundColor: '#09090b', borderColor: '#18181b', borderRadius: '12px' }}
+                                  labelStyle={{ color: '#fff', fontWeight: 'bold' }}
+                                />
+                                <Bar dataKey="relatos" fill="#6366f1" radius={[6, 6, 0, 0]} />
+                              </BarChart>
+                            ) : chartType === 'line' ? (
+                              <LineChart data={timelineData} margin={{ top: 20, right: 15, left: -20, bottom: 20 }}>
+                                <XAxis dataKey="label" stroke="#888888" fontSize={10} tickLine={false} axisLine={false} />
+                                <YAxis stroke="#888888" fontSize={10} tickLine={false} axisLine={false} allowDecimals={false} />
+                                <Tooltip
+                                  contentStyle={{ backgroundColor: '#09090b', borderColor: '#18181b', borderRadius: '12px' }}
+                                  labelStyle={{ color: '#fff', fontWeight: 'bold' }}
+                                />
+                                <Line type="monotone" dataKey="relatos" stroke="#6366f1" strokeWidth={3} dot={{ fill: '#6366f1', strokeWidth: 1, r: 4 }} activeDot={{ r: 6 }} />
+                              </LineChart>
+                            ) : (
+                              <AreaChart data={timelineData} margin={{ top: 20, right: 15, left: -20, bottom: 20 }}>
+                                <defs>
+                                  <linearGradient id="colorRelatos" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="5%" stopColor="#6366f1" stopOpacity={0.4}/>
+                                    <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
+                                  </linearGradient>
+                                </defs>
+                                <XAxis dataKey="label" stroke="#888888" fontSize={10} tickLine={false} axisLine={false} />
+                                <YAxis stroke="#888888" fontSize={10} tickLine={false} axisLine={false} allowDecimals={false} />
+                                <Tooltip
+                                  contentStyle={{ backgroundColor: '#09090b', borderColor: '#18181b', borderRadius: '12px' }}
+                                  labelStyle={{ color: '#fff', fontWeight: 'bold' }}
+                                />
+                                <Area type="monotone" dataKey="relatos" stroke="#6366f1" strokeWidth={2.5} fillOpacity={1} fill="url(#colorRelatos)" />
+                              </AreaChart>
+                            )}
+                          </ResponsiveContainer>
+                        ) : (
+                          <div className="h-full flex flex-col items-center justify-center text-zinc-550 gap-2">
+                            <AlertCircle className="h-8 w-8 text-zinc-600" />
+                            <span className="text-xs">Nenhum relato atende aos filtros atuais.</span>
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+
+                    {/* Resolved vs Unresolved Proportion */}
+                    <Card className="bg-zinc-950/60 border-zinc-900 text-white">
+                      <CardHeader>
+                        <CardTitle className="text-lg font-bold">Reboot Eficácia</CardTitle>
+                        <CardDescription className="text-zinc-500">Relatos resolvidos ou não pós reboot no escopo filtrado.</CardDescription>
+                      </CardHeader>
+                      <CardContent className="h-[350px] min-h-[300px] flex flex-col justify-between pt-4">
+                        {isMounted && filteredReports.length > 0 ? (
+                          <>
+                            <div className="flex-1 h-60">
+                              <ResponsiveContainer width="100%" height="100%">
+                                <PieChart>
+                                  <Pie
+                                    data={pieChartData}
+                                    cx="50%"
+                                    cy="45%"
+                                    innerRadius={55}
+                                    outerRadius={75}
+                                    paddingAngle={4}
+                                    dataKey="value"
+                                  >
+                                    {pieChartData.map((entry, index) => (
+                                      <Cell key={`cell-${index}`} fill={entry.color} />
+                                    ))}
+                                  </Pie>
+                                  <Tooltip
+                                    contentStyle={{ backgroundColor: '#09090b', borderColor: '#18181b', borderRadius: '12px' }}
+                                  />
+                                  <Legend verticalAlign="bottom" height={36} iconType="circle" />
+                                </PieChart>
+                              </ResponsiveContainer>
+                            </div>
+                            <div className="text-center text-[10px] text-zinc-500">
+                              Proporção calculada para {filteredReports.length} relatos.
+                            </div>
+                          </>
+                        ) : (
+                          <div className="h-full flex items-center justify-center text-zinc-550 text-xs">
+                            Sem dados de proporção.
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
                   </div>
-                ) : (
-                  <div className="overflow-x-auto rounded-lg border border-zinc-900">
-                    <Table className="bg-zinc-950/80">
-                      <TableHeader className="bg-zinc-900/50 border-zinc-850">
-                        <TableRow className="hover:bg-zinc-900/20">
-                          <TableHead className="text-zinc-400 font-semibold">Data</TableHead>
-                          <TableHead className="text-zinc-400 font-semibold">Serviço</TableHead>
-                          {formSchema.map(f => (
-                            <TableHead key={f.id} className="text-zinc-400 font-semibold">{f.label}</TableHead>
-                          ))}
-                          <TableHead className="text-zinc-400 font-semibold text-center">Resolvido?</TableHead>
-                          <TableHead className="text-zinc-400 font-semibold text-right">Ações</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {filteredReports.map((report) => {
-                          const dateFormatted = new Date(report.created_at).toLocaleString('pt-BR');
-                          const svcName = report.services?.name || services.find(s => s.id === report.service_id)?.name || 'Serviço Excluído';
-                          return (
-                            <TableRow key={report.id} className="hover:bg-zinc-900/30 border-zinc-900">
-                              <TableCell className="text-zinc-300 text-xs whitespace-nowrap">{dateFormatted}</TableCell>
-                              <TableCell className="font-bold text-white text-sm">
-                                <div className="flex flex-col sm:flex-row sm:items-center gap-1.5">
-                                  <span>{svcName}</span>
-                                  {report.custom_fields?.active_alert && (
-                                    <div className="flex flex-col sm:flex-row gap-1">
-                                      {String(report.custom_fields.active_alert).split(' | ').map((tag, idx) => (
-                                        <Badge key={idx} className="bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[9px] px-1.5 py-0 rounded-md w-fit font-medium whitespace-nowrap">
-                                          {tag}
-                                        </Badge>
-                                      ))}
-                                    </div>
-                                  )}
-                                </div>
-                              </TableCell>
-                              {formSchema.map(f => {
-                                const val = (report as any)[f.id] ?? report.custom_fields?.[f.id] ?? '-';
+
+                  {/* LIST OF FILTERED REPORTS */}
+                  <Card className="bg-zinc-950/60 border-zinc-900 text-white mt-6">
+                    <CardHeader className="flex flex-row items-center justify-between">
+                      <div>
+                        <CardTitle className="text-lg font-bold">Relatos Filtrados</CardTitle>
+                        <CardDescription className="text-zinc-500">
+                          Lista contendo os {filteredReports.length} relatos que correspondem aos filtros selecionados acima.
+                        </CardDescription>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      {filteredReports.length === 0 ? (
+                        <div className="text-center py-12 text-zinc-550">
+                          Nenhum relato atende aos filtros selecionados.
+                        </div>
+                      ) : (
+                        <div className="overflow-x-auto rounded-lg border border-zinc-900">
+                          <Table className="bg-zinc-950/80">
+                            <TableHeader className="bg-zinc-900/50 border-zinc-850">
+                              <TableRow className="hover:bg-zinc-900/20">
+                                <TableHead className="text-zinc-400 font-semibold">Data</TableHead>
+                                <TableHead className="text-zinc-400 font-semibold">Serviço</TableHead>
+                                {formSchema.map(f => (
+                                  <TableHead key={f.id} className="text-zinc-400 font-semibold">{f.label}</TableHead>
+                                ))}
+                                <TableHead className="text-zinc-400 font-semibold text-center">Resolvido?</TableHead>
+                                <TableHead className="text-zinc-400 font-semibold text-right">Ações</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {filteredReports.map((report) => {
+                                const dateFormatted = new Date(report.created_at).toLocaleString('pt-BR');
+                                const svcName = report.services?.name || services.find(s => s.id === report.service_id)?.name || 'Serviço Excluído';
                                 return (
-                                  <TableCell key={f.id} className="text-zinc-300 text-xs max-w-[200px] truncate" title={val}>{val}</TableCell>
+                                  <TableRow key={report.id} className="hover:bg-zinc-900/30 border-zinc-900">
+                                    <TableCell className="text-zinc-300 text-xs whitespace-nowrap">{dateFormatted}</TableCell>
+                                    <TableCell className="font-bold text-white text-sm">
+                                      <div className="flex flex-col sm:flex-row sm:items-center gap-1.5">
+                                        <span>{svcName}</span>
+                                        {report.custom_fields?.active_alert && (
+                                          <div className="flex flex-col sm:flex-row gap-1">
+                                            {String(report.custom_fields.active_alert).split(' | ').map((tag, idx) => (
+                                              <Badge key={idx} className="bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[9px] px-1.5 py-0 rounded-md w-fit font-medium whitespace-nowrap">
+                                                {tag}
+                                              </Badge>
+                                            ))}
+                                          </div>
+                                        )}
+                                      </div>
+                                    </TableCell>
+                                    {formSchema.map(f => {
+                                      const val = (report as any)[f.id] ?? report.custom_fields?.[f.id] ?? '-';
+                                      return (
+                                        <TableCell key={f.id} className="text-zinc-300 text-xs max-w-[200px] truncate" title={val}>{val}</TableCell>
+                                      );
+                                    })}
+                                    <TableCell className="text-center">
+                                      {report.is_resolved ? (
+                                        <Badge className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] mx-auto w-fit flex gap-1 items-center justify-center">
+                                          <CheckCircle2 className="h-3 w-3" /> Sim
+                                        </Badge>
+                                      ) : (
+                                        <Badge className="bg-red-500/10 text-red-400 border border-red-500/20 text-[10px] mx-auto w-fit flex gap-1 items-center justify-center">
+                                          <XCircle className="h-3 w-3" /> Não
+                                        </Badge>
+                                      )}
+                                    </TableCell>
+                                    <TableCell className="text-right">
+                                      <Button
+                                        onClick={() => handleDeleteReport(report.id)}
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-8 w-8 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg"
+                                        title="Excluir relato"
+                                      >
+                                        <Trash2 className="h-4 w-4" />
+                                      </Button>
+                                    </TableCell>
+                                  </TableRow>
                                 );
                               })}
-                              <TableCell className="text-center">
-                                {report.is_resolved ? (
-                                  <Badge className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] mx-auto w-fit flex gap-1 items-center justify-center">
-                                    <CheckCircle2 className="h-3 w-3" /> Sim
-                                  </Badge>
-                                ) : (
-                                  <Badge className="bg-red-500/10 text-red-400 border border-red-500/20 text-[10px] mx-auto w-fit flex gap-1 items-center justify-center">
-                                    <XCircle className="h-3 w-3" /> Não
-                                  </Badge>
-                                )}
-                              </TableCell>
-                              <TableCell className="text-right">
-                                <Button
-                                  onClick={() => handleDeleteReport(report.id)}
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-8 w-8 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg"
-                                  title="Excluir relato"
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </TableCell>
-                            </TableRow>
-                          );
-                        })}
-                      </TableBody>
-                    </Table>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+                            </TableBody>
+                          </Table>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                </div>
+              ) : (
+                <div className="space-y-6 animate-in fade-in-50 duration-300">
+                  {!isAlertsReportGenerated ? (
+                    /* ALERTS LIST VIEW (SELECTION) */
+                    <Card className="bg-zinc-950/60 border-zinc-900 text-white">
+                      <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-900 pb-5">
+                        <div>
+                          <CardTitle className="text-xl font-bold">Análise por Alertas</CardTitle>
+                          <CardDescription className="text-zinc-550 mt-1">
+                            Selecione um ou mais alarmes do histórico para gerar um relatório consolidado de todos os relatos recebidos durante suas vigências.
+                          </CardDescription>
+                        </div>
+                        <Button
+                          disabled={selectedAlertIds.length === 0}
+                          onClick={() => {
+                            setIsAlertsReportGenerated(true);
+                            setReportFilterService('all');
+                            setReportFilterIssue('all');
+                            setReportFilterRegion('all');
+                            setReportFilterConnection('all');
+                          }}
+                          className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold gap-1.5 rounded-xl text-xs py-2 px-4 shadow-lg shadow-indigo-600/10 transition-all self-start sm:self-auto"
+                        >
+                          <Sliders className="h-4 w-4" />
+                          Gerar Relatório Analítico ({selectedAlertIds.length})
+                        </Button>
+                      </CardHeader>
+                      <CardContent className="pt-6">
+                        {networkAlerts.length === 0 ? (
+                          <div className="text-center py-10 text-zinc-500 text-xs">
+                            Nenhum alerta de instabilidade registrado.
+                          </div>
+                        ) : (
+                          <div className="overflow-x-auto rounded-lg border border-zinc-900">
+                            <Table className="bg-zinc-950/80">
+                              <TableHeader className="bg-zinc-900/50 border-zinc-850">
+                                <TableRow className="hover:bg-zinc-900/20">
+                                  <TableHead className="w-12 text-center">
+                                    <input
+                                      type="checkbox"
+                                      checked={selectedAlertIds.length === networkAlerts.length && networkAlerts.length > 0}
+                                      onChange={(e) => {
+                                        if (e.target.checked) {
+                                          setSelectedAlertIds(networkAlerts.map(a => a.id));
+                                        } else {
+                                          setSelectedAlertIds([]);
+                                        }
+                                      }}
+                                      className="rounded border-zinc-800 bg-zinc-900 text-indigo-600 focus:ring-indigo-500 h-4 w-4 cursor-pointer"
+                                    />
+                                  </TableHead>
+                                  <TableHead className="text-zinc-400 font-semibold">Alerta</TableHead>
+                                  <TableHead className="text-zinc-400 font-semibold">Tipo</TableHead>
+                                  <TableHead className="text-zinc-400 font-semibold">Período de Vigência</TableHead>
+                                  <TableHead className="text-zinc-400 font-semibold text-center">Relatos</TableHead>
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {networkAlerts.map((alert) => {
+                                  const createdDate = new Date(alert.created_at).toLocaleString('pt-BR');
+                                  const isExpired = alert.expires_at && new Date(alert.expires_at).getTime() < Date.now();
+                                  const isActive = alert.is_active && !isExpired;
+                                  const count = reportsCountPerAlert[alert.id] || 0;
+                                  const isSelected = selectedAlertIds.includes(alert.id);
+
+                                  return (
+                                    <TableRow 
+                                      key={alert.id} 
+                                      className={`hover:bg-zinc-900/30 border-zinc-900 transition-colors cursor-pointer ${
+                                        isSelected ? 'bg-indigo-900/5 hover:bg-indigo-900/10 border-l border-l-indigo-500' : ''
+                                      }`}
+                                      onClick={() => {
+                                        setSelectedAlertIds(prev =>
+                                          prev.includes(alert.id)
+                                            ? prev.filter(id => id !== alert.id)
+                                            : [...prev, alert.id]
+                                        );
+                                      }}
+                                    >
+                                      <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
+                                        <input
+                                          type="checkbox"
+                                          checked={isSelected}
+                                          onChange={(e) => {
+                                            setSelectedAlertIds(prev =>
+                                              e.target.checked
+                                                ? [...prev, alert.id]
+                                                : prev.filter(id => id !== alert.id)
+                                            );
+                                          }}
+                                          className="rounded border-zinc-800 bg-zinc-900 text-indigo-600 focus:ring-indigo-500 h-4 w-4 cursor-pointer"
+                                        />
+                                      </TableCell>
+                                      <TableCell className="font-bold text-white text-sm">
+                                        {alert.title}
+                                        <div className="text-[10px] text-zinc-500 font-normal mt-0.5">Criado em: {createdDate}</div>
+                                      </TableCell>
+                                      <TableCell className="text-zinc-300 text-xs">
+                                        <Badge variant="outline" className="border-indigo-500/30 text-indigo-400 text-[10px]">
+                                          {alert.alert_type}
+                                        </Badge>
+                                      </TableCell>
+                                      <TableCell className="text-zinc-400 text-xs">
+                                        <div className="flex flex-col gap-0.5">
+                                          <div><span className="text-zinc-500 text-[10px]">Início:</span> {createdDate}</div>
+                                          <div>
+                                            <span className="text-zinc-500 text-[10px]">Término:</span>{' '}
+                                            {alert.expires_at ? (
+                                              new Date(alert.expires_at).toLocaleString('pt-BR')
+                                            ) : !alert.is_active ? (
+                                              new Date(alert.updated_at || alert.created_at).toLocaleString('pt-BR')
+                                            ) : (
+                                              <span className="text-emerald-400 font-semibold">Ativo (em vigência)</span>
+                                            )}
+                                          </div>
+                                        </div>
+                                      </TableCell>
+                                      <TableCell className="text-center">
+                                        <Badge className="bg-zinc-900 border border-zinc-850 text-zinc-300 text-xs px-2 py-0.5 rounded-full font-bold">
+                                          {count} relatos
+                                        </Badge>
+                                      </TableCell>
+                                    </TableRow>
+                                  );
+                                })}
+                              </TableBody>
+                            </Table>
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  ) : (
+                    /* ALERTS REPORT DASHBOARD VIEW */
+                    <div className="space-y-6 animate-in zoom-in-95 duration-200">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div className="flex items-center gap-3">
+                          <Button 
+                            onClick={() => setIsAlertsReportGenerated(false)}
+                            variant="outline"
+                            className="border-zinc-800 hover:bg-zinc-900 text-zinc-400 hover:text-white rounded-xl text-xs gap-1.5 h-9 animate-in slide-in-from-left duration-200"
+                          >
+                            <ArrowLeft className="h-4 w-4" />
+                            Voltar para Seleção
+                          </Button>
+                          <div>
+                            <h2 className="text-xl font-bold text-white">Relatório Analítico por Alertas</h2>
+                            <p className="text-xs text-zinc-500">Métricas consolidadas do(s) alarme(s) selecionado(s).</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* SELECTED ALERTS LABELS */}
+                      <Card className="bg-zinc-950/45 border-zinc-900 p-4 flex flex-wrap gap-2 items-center">
+                        <span className="text-xs text-zinc-400 font-semibold mr-1">Escopo de Análise:</span>
+                        {networkAlerts.filter(a => selectedAlertIds.includes(a.id)).map(alert => (
+                          <Badge key={alert.id} className="bg-indigo-600/10 text-indigo-400 border border-indigo-500/25 px-2.5 py-0.5 text-xs font-semibold rounded-md">
+                            {alert.title}
+                          </Badge>
+                        ))}
+                      </Card>
+
+                      {/* GENERAL METRICS ROW */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                        {/* Metric 1 */}
+                        <Card className="bg-zinc-950/60 border-zinc-900 p-5 flex flex-col justify-between">
+                          <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">Total de Relatos</span>
+                          <span className="text-3xl font-extrabold text-white mt-2">{reportsInSelectedAlerts.length}</span>
+                          <span className="text-[10px] text-zinc-400 mt-1">no escopo dos alarmes</span>
+                        </Card>
+                        {/* Metric 2 */}
+                        <Card className="bg-zinc-950/60 border-zinc-900 p-5 flex flex-col justify-between">
+                          <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">Relatos Filtrados</span>
+                          <span className="text-3xl font-extrabold text-indigo-400 mt-2">{filteredReportsInReportView.length}</span>
+                          <span className="text-[10px] text-zinc-400 mt-1">com filtros aplicados</span>
+                        </Card>
+                        {/* Metric 3 */}
+                        <Card className="bg-zinc-950/60 border-zinc-900 p-5 flex flex-col justify-between">
+                          <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">Serviços Afetados</span>
+                          <span className="text-3xl font-extrabold text-amber-500 mt-2">
+                            {new Set(filteredReportsInReportView.map(r => r.service_id)).size}
+                          </span>
+                          <span className="text-[10px] text-zinc-400 mt-1">plataformas impactadas</span>
+                        </Card>
+                        {/* Metric 4 */}
+                        <Card className="bg-zinc-950/60 border-zinc-900 p-5 flex flex-col justify-between">
+                          <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">Eficácia de Reboot</span>
+                          <span className="text-3xl font-extrabold text-emerald-500 mt-2">
+                            {filteredReportsInReportView.length > 0 
+                              ? `${Math.round((filteredReportsInReportView.filter(r => r.is_resolved).length / filteredReportsInReportView.length) * 100)}%`
+                              : '0%'
+                            }
+                          </span>
+                          <span className="text-[10px] text-zinc-400 mt-1">resolvidos pós reboot</span>
+                        </Card>
+                      </div>
+
+                      {/* INLINE DYNAMIC FILTERS BAR */}
+                      <Card className="bg-zinc-950/60 border-zinc-900 text-white">
+                        <CardHeader className="py-3.5 border-b border-zinc-900 flex flex-row items-center gap-2">
+                          <Filter className="h-4 w-4 text-indigo-400" />
+                          <CardTitle className="text-xs font-bold uppercase tracking-wider text-zinc-300">Filtros do Relatório</CardTitle>
+                        </CardHeader>
+                        <CardContent className="p-4">
+                          <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+                            {/* Filter: Service */}
+                            <div className="space-y-1">
+                              <Label className="text-[11px] text-zinc-400 font-semibold">Serviço</Label>
+                              <Select value={reportFilterService} onValueChange={(val) => setReportFilterService(val || 'all')}>
+                                <SelectTrigger className="bg-zinc-900 border-zinc-800 text-xs h-9">
+                                  <SelectValue placeholder="Todos" />
+                                </SelectTrigger>
+                                <SelectContent className="bg-zinc-900 border-zinc-800 text-white">
+                                  <SelectItem value="all">Todos os Serviços</SelectItem>
+                                  {services.map((s) => (
+                                    <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+
+                            {/* Filter: Issue Type */}
+                            <div className="space-y-1">
+                              <Label className="text-[11px] text-zinc-400 font-semibold">Problema</Label>
+                              <Select value={reportFilterIssue} onValueChange={(val) => setReportFilterIssue(val || 'all')}>
+                                <SelectTrigger className="bg-zinc-900 border-zinc-800 text-xs h-9">
+                                  <SelectValue placeholder="Todos" />
+                                </SelectTrigger>
+                                <SelectContent className="bg-zinc-900 border-zinc-800 text-white">
+                                  <SelectItem value="all">Todos os Problemas</SelectItem>
+                                  {formSchema.find(f => f.id === 'issue_type')?.options?.map(opt => (
+                                    <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+
+                            {/* Filter: Region */}
+                            <div className="space-y-1">
+                              <Label className="text-[11px] text-zinc-400 font-semibold">Região</Label>
+                              <Select value={reportFilterRegion} onValueChange={(val) => setReportFilterRegion(val || 'all')}>
+                                <SelectTrigger className="bg-zinc-900 border-zinc-800 text-xs h-9">
+                                  <SelectValue placeholder="Todas" />
+                                </SelectTrigger>
+                                <SelectContent className="bg-zinc-900 border-zinc-800 text-white">
+                                  <SelectItem value="all">Todas as Regiões</SelectItem>
+                                  {formSchema.find(f => f.id === 'region')?.options?.map(opt => (
+                                    <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+
+                            {/* Filter: Connection Type */}
+                            <div className="space-y-1">
+                              <Label className="text-[11px] text-zinc-400 font-semibold">Meio de Transmissão</Label>
+                              <Select value={reportFilterConnection} onValueChange={(val) => setReportFilterConnection(val || 'all')}>
+                                <SelectTrigger className="bg-zinc-900 border-zinc-800 text-xs h-9">
+                                  <SelectValue placeholder="Todos" />
+                                </SelectTrigger>
+                                <SelectContent className="bg-zinc-900 border-zinc-800 text-white">
+                                  <SelectItem value="all">Todos os Meios</SelectItem>
+                                  {formSchema.find(f => f.id === 'connection_type')?.options?.map(opt => (
+                                    <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+
+                      {/* MINI CHARTS CONTAINER */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {/* Mini Chart 1: Services Distribution */}
+                        <Card className="bg-zinc-950/60 border-zinc-900 text-white">
+                          <CardHeader className="pb-2">
+                            <CardTitle className="text-sm font-bold text-zinc-300">Serviços Mais Impactados</CardTitle>
+                          </CardHeader>
+                          <CardContent className="h-56 pt-2">
+                            {isMounted && selectedAlertsBarChartData.length > 0 ? (
+                              <ResponsiveContainer width="100%" height="100%">
+                                <BarChart data={selectedAlertsBarChartData} margin={{ top: 10, right: 10, left: -25, bottom: 5 }}>
+                                  <XAxis dataKey="name" stroke="#888888" fontSize={9} tickLine={false} axisLine={false} />
+                                  <YAxis stroke="#888888" fontSize={9} tickLine={false} axisLine={false} allowDecimals={false} />
+                                  <Tooltip contentStyle={{ backgroundColor: '#09090b', borderColor: '#18181b', borderRadius: '10px', fontSize: '10px' }} />
+                                  <Bar dataKey="relatos" fill="#6366f1" radius={[4, 4, 0, 0]} />
+                                </BarChart>
+                              </ResponsiveContainer>
+                            ) : (
+                              <div className="h-full flex items-center justify-center text-zinc-500 text-xs">
+                                Sem dados estatísticos
+                              </div>
+                            )}
+                          </CardContent>
+                        </Card>
+
+                        {/* Mini Chart 2: Issues Distribution */}
+                        <Card className="bg-zinc-950/60 border-zinc-900 text-white">
+                          <CardHeader className="pb-2">
+                            <CardTitle className="text-sm font-bold text-zinc-300">Principais Sintomas / Problemas</CardTitle>
+                          </CardHeader>
+                          <CardContent className="h-56 pt-2">
+                            {isMounted && selectedAlertsIssuesChartData.length > 0 ? (
+                              <ResponsiveContainer width="100%" height="100%">
+                                <BarChart data={selectedAlertsIssuesChartData} layout="vertical" margin={{ top: 10, right: 10, left: 30, bottom: 5 }}>
+                                  <XAxis type="number" stroke="#888888" fontSize={9} tickLine={false} axisLine={false} allowDecimals={false} />
+                                  <YAxis dataKey="name" type="category" stroke="#888888" fontSize={9} width={90} tickLine={false} axisLine={false} />
+                                  <Tooltip contentStyle={{ backgroundColor: '#09090b', borderColor: '#18181b', borderRadius: '10px', fontSize: '10px' }} />
+                                  <Bar dataKey="relatos" fill="#f59e0b" radius={[0, 4, 4, 0]} />
+                                </BarChart>
+                              </ResponsiveContainer>
+                            ) : (
+                              <div className="h-full flex items-center justify-center text-zinc-500 text-xs">
+                                Sem dados de sintomas
+                              </div>
+                            )}
+                          </CardContent>
+                        </Card>
+                      </div>
+
+                      {/* DETAIL REPORT TABLE */}
+                      <Card className="bg-zinc-950/60 border-zinc-900 text-white">
+                        <CardHeader>
+                          <CardTitle className="text-base font-bold">Detalhamento dos Relatos no Escopo</CardTitle>
+                          <CardDescription className="text-xs text-zinc-500 flex flex-col md:flex-row justify-between md:items-center gap-3">
+                            <span>Exibindo {filteredReportsInReportView.length} relatos que caíram nas janelas ativas selecionadas.</span>
+                            {selectedAlerts.length > 1 && (
+                              <span className="text-[10px] text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 px-2.5 py-0.5 rounded-lg w-fit">
+                                * Relatos em períodos sobrepostos são unificados para evitar duplicidade.
+                              </span>
+                            )}
+                          </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                          {filteredReportsInReportView.length === 0 ? (
+                            <div className="text-center py-10 text-zinc-500 text-xs">
+                              Nenhum relato encontrado para a combinação atual de filtros.
+                            </div>
+                          ) : (
+                            <div className="overflow-x-auto rounded-lg border border-zinc-900">
+                              <Table className="bg-zinc-950/80">
+                                <TableHeader className="bg-zinc-900/50 border-zinc-850">
+                                  <TableRow className="hover:bg-zinc-900/20">
+                                    <TableHead className="text-zinc-400 font-semibold text-xs">Data</TableHead>
+                                    <TableHead className="text-zinc-400 font-semibold text-xs">Serviço</TableHead>
+                                    {formSchema.map(f => (
+                                      <TableHead key={f.id} className="text-zinc-400 font-semibold text-xs">{f.label}</TableHead>
+                                    ))}
+                                    <TableHead className="text-zinc-400 font-semibold text-xs text-center">Resolvido?</TableHead>
+                                  </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                  {filteredReportsInReportView.map((report) => {
+                                    const dateFormatted = new Date(report.created_at).toLocaleString('pt-BR');
+                                    const svcName = report.services?.name || services.find(s => s.id === report.service_id)?.name || 'Serviço Excluído';
+                                    
+                                    // Find matching selected alerts whose active period includes this report
+                                    const matchingAlerts = selectedAlerts.filter(alert => {
+                                      const start = new Date(alert.created_at).getTime();
+                                      let end = Date.now();
+                                      if (alert.expires_at) {
+                                        end = new Date(alert.expires_at).getTime();
+                                      } else if (!alert.is_active) {
+                                        end = new Date(alert.updated_at || alert.created_at).getTime();
+                                      }
+                                      const rTime = new Date(report.created_at).getTime();
+                                      return rTime >= start && rTime <= end;
+                                    });
+
+                                    return (
+                                      <TableRow key={report.id} className="hover:bg-zinc-900/30 border-zinc-900">
+                                        <TableCell className="text-zinc-300 text-[11px] whitespace-nowrap">{dateFormatted}</TableCell>
+                                        <TableCell className="font-bold text-white text-xs">
+                                          <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 flex-wrap">
+                                            <span>{svcName}</span>
+                                            {matchingAlerts.length > 0 && (
+                                              <div className="flex flex-wrap gap-1">
+                                                {matchingAlerts.map(alert => (
+                                                  <Badge key={alert.id} className="bg-indigo-500/10 text-indigo-400 border border-indigo-500/25 text-[9px] px-1.5 py-0 rounded-md w-fit font-medium whitespace-nowrap" title={alert.title}>
+                                                    {alert.title.length > 15 ? alert.title.slice(0, 15) + '...' : alert.title}
+                                                  </Badge>
+                                                ))}
+                                              </div>
+                                            )}
+                                          </div>
+                                        </TableCell>
+                                        {formSchema.map(f => {
+                                          const val = (report as any)[f.id] ?? report.custom_fields?.[f.id] ?? '-';
+                                          return (
+                                            <TableCell key={f.id} className="text-zinc-300 text-[11px] max-w-[150px] truncate" title={val}>{val}</TableCell>
+                                          );
+                                        })}
+                                        <TableCell className="text-center">
+                                          {report.is_resolved ? (
+                                            <Badge className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[9px] mx-auto w-fit flex gap-1 items-center justify-center">
+                                              <CheckCircle2 className="h-3 w-3" /> Sim
+                                            </Badge>
+                                          ) : (
+                                            <Badge className="bg-red-500/10 text-red-400 border border-red-500/20 text-[9px] mx-auto w-fit flex gap-1 items-center justify-center">
+                                              <XCircle className="h-3 w-3" /> Não
+                                            </Badge>
+                                          )}
+                                        </TableCell>
+                                      </TableRow>
+                                    );
+                                  })}
+                                </TableBody>
+                              </Table>
+                            </div>
+                          )}
+                        </CardContent>
+                      </Card>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         )}
 
         {/* TAB 3: SETTINGS (FORM OPTIONS + SERVICE CRUD) */}
         {activeTab === 'settings' && (
-          <div className="flex flex-col md:flex-row gap-6 items-start w-full">
-            {/* SIDEBAR MENU */}
-            <aside className="w-full md:w-64 flex flex-col gap-1.5 bg-zinc-950/40 p-3 rounded-2xl border border-zinc-900/60 md:sticky md:top-24">
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-start relative z-10 animate-in fade-in duration-300">
+            {/* SIDEBAR NAVIGATION MENU */}
+            <aside className="lg:col-span-1 flex flex-col gap-1.5 bg-zinc-950/60 p-4 rounded-2xl border border-zinc-900 lg:sticky lg:top-24">
+              <div className="px-2 py-1.5 mb-2">
+                <span className="text-[10px] uppercase font-bold tracking-widest text-zinc-500">Configurações</span>
+              </div>
               {hasReadAccess('cards') && (
                 <Button
                   onClick={() => setSettingsSubTab('cards')}
                   variant="ghost"
-                  className={`w-full justify-start rounded-xl text-xs font-semibold px-4 py-3 transition-all gap-2 ${
+                  className={`w-full justify-start rounded-xl text-xs font-semibold gap-2 py-5 px-4 transition-all duration-200 ${
                     settingsSubTab === 'cards'
-                      ? 'bg-indigo-600/10 text-indigo-400 border border-indigo-500/20 hover:bg-indigo-600/15'
-                      : 'text-zinc-400 hover:text-white hover:bg-zinc-900/40 border border-transparent'
+                      ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/10'
+                      : 'text-zinc-400 hover:text-white hover:bg-zinc-900/50'
                   }`}
                 >
                   <Layers className="h-4 w-4" />
@@ -1802,10 +2367,10 @@ export default function AdminPage() {
                 <Button
                   onClick={() => setSettingsSubTab('form')}
                   variant="ghost"
-                  className={`w-full justify-start rounded-xl text-xs font-semibold px-4 py-3 transition-all gap-2 ${
+                  className={`w-full justify-start rounded-xl text-xs font-semibold gap-2 py-5 px-4 transition-all duration-200 ${
                     settingsSubTab === 'form'
-                      ? 'bg-indigo-600/10 text-indigo-400 border border-indigo-500/20 hover:bg-indigo-600/15'
-                      : 'text-zinc-400 hover:text-white hover:bg-zinc-900/40 border border-transparent'
+                      ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/10'
+                      : 'text-zinc-400 hover:text-white hover:bg-zinc-900/50'
                   }`}
                 >
                   <FormInput className="h-4 w-4" />
@@ -1817,10 +2382,10 @@ export default function AdminPage() {
                 <Button
                   onClick={() => setSettingsSubTab('alerts')}
                   variant="ghost"
-                  className={`w-full justify-start rounded-xl text-xs font-semibold px-4 py-3 transition-all gap-2 ${
+                  className={`w-full justify-start rounded-xl text-xs font-semibold gap-2 py-5 px-4 transition-all duration-200 ${
                     settingsSubTab === 'alerts'
-                      ? 'bg-indigo-600/10 text-indigo-400 border border-indigo-500/20 hover:bg-indigo-600/15'
-                      : 'text-zinc-400 hover:text-white hover:bg-zinc-900/40 border border-transparent'
+                      ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/10'
+                      : 'text-zinc-400 hover:text-white hover:bg-zinc-900/50'
                   }`}
                 >
                   <AlertCircle className="h-4 w-4" />
@@ -1831,10 +2396,10 @@ export default function AdminPage() {
                 <Button
                   onClick={() => setSettingsSubTab('logs')}
                   variant="ghost"
-                  className={`w-full justify-start rounded-xl text-xs font-semibold px-4 py-3 transition-all gap-2 ${
+                  className={`w-full justify-start rounded-xl text-xs font-semibold gap-2 py-5 px-4 transition-all duration-200 ${
                     settingsSubTab === 'logs'
-                      ? 'bg-indigo-600/10 text-indigo-400 border border-indigo-500/20 hover:bg-indigo-600/15'
-                      : 'text-zinc-400 hover:text-white hover:bg-zinc-900/40 border border-transparent'
+                      ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/10'
+                      : 'text-zinc-400 hover:text-white hover:bg-zinc-900/50'
                   }`}
                 >
                   <Activity className="h-4 w-4" />
@@ -1845,10 +2410,10 @@ export default function AdminPage() {
                 <Button
                   onClick={() => setSettingsSubTab('users')}
                   variant="ghost"
-                  className={`w-full justify-start rounded-xl text-xs font-semibold px-4 py-3 transition-all gap-2 ${
+                  className={`w-full justify-start rounded-xl text-xs font-semibold gap-2 py-5 px-4 transition-all duration-200 ${
                     settingsSubTab === 'users'
-                      ? 'bg-indigo-600/10 text-indigo-400 border border-indigo-500/20 hover:bg-indigo-600/15'
-                      : 'text-zinc-400 hover:text-white hover:bg-zinc-900/40 border border-transparent'
+                      ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/10'
+                      : 'text-zinc-400 hover:text-white hover:bg-zinc-900/50'
                   }`}
                 >
                   <Shield className="h-4 w-4" />
@@ -1858,7 +2423,7 @@ export default function AdminPage() {
             </aside>
 
             {/* CONTENT AREA */}
-            <div className="flex-1 w-full min-w-0">
+            <div className="lg:col-span-3 w-full min-w-0">
               {settingsSubTab === 'cards' && (
                 <Card className="bg-zinc-950/60 border-zinc-900 text-white">
                   <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-900 pb-5">
@@ -2524,7 +3089,9 @@ export default function AdminPage() {
                                       {alert.description}
                                     </TableCell>
                                     <TableCell className="text-zinc-400 text-xs">
-                                      {alert.expires_at ? (
+                                      {alert.alert_type === 'Detecção Automática' ? (
+                                        <span className="text-indigo-400 font-semibold">Automático</span>
+                                      ) : alert.expires_at ? (
                                         <span>Expirará: {new Date(alert.expires_at).toLocaleString('pt-BR')}</span>
                                       ) : (
                                         <span className="text-zinc-500">Desativação manual</span>
@@ -2548,39 +3115,43 @@ export default function AdminPage() {
                                     {hasWriteAccess('alerts') && (
                                       <TableCell className="text-right whitespace-nowrap">
                                         <div className="flex justify-end items-center gap-1.5">
-                                          <Button
-                                            onClick={() => handleToggleAlertActive(alert.id, alert.is_active)}
-                                            variant="ghost"
-                                            size="sm"
-                                            className={`text-xs px-2.5 py-1 rounded-lg border h-8 ${
-                                              alert.is_active
-                                                ? 'border-red-500/20 text-red-450 hover:bg-red-500/10'
-                                                : 'border-emerald-500/20 text-emerald-450 hover:bg-emerald-500/10'
-                                            }`}
-                                            disabled={isExpired}
-                                            title={alert.is_active ? 'Desativar alerta' : 'Ativar alerta'}
-                                          >
-                                            {alert.is_active ? 'Desativar' : 'Ativar'}
-                                          </Button>
-                                          
-                                          <Button
-                                            onClick={() => {
-                                              setEditingAlert(alert);
-                                              setAlertFormTitle(alert.title);
-                                              setAlertFormType(alert.alert_type);
-                                              setAlertFormDescription(alert.description);
-                                              setAlertFormExpirationType(alert.expires_at ? 'scheduled' : 'manual');
-                                              setAlertFormExpiresAt(alert.expires_at ? new Date(new Date(alert.expires_at).getTime() - new Date().getTimezoneOffset() * 60 * 1000).toISOString().slice(0, 16) : '');
-                                              setIsAlertModalOpen(true);
-                                            }}
-                                            variant="ghost"
-                                            size="icon"
-                                            className="h-8 w-8 text-indigo-400 hover:text-indigo-300 hover:bg-indigo-500/10 rounded-lg"
-                                            title="Editar Alerta"
-                                          >
-                                            <Edit2 className="h-3.5 w-3.5" />
-                                          </Button>
-
+                                          {alert.alert_type !== 'Detecção Automática' && (
+                                            <>
+                                              <Button
+                                                onClick={() => handleToggleAlertActive(alert.id, alert.is_active)}
+                                                variant="ghost"
+                                                size="sm"
+                                                className={`text-xs px-2.5 py-1 rounded-lg border h-8 ${
+                                                  alert.is_active
+                                                    ? 'border-red-500/20 text-red-450 hover:bg-red-500/10'
+                                                    : 'border-emerald-500/20 text-emerald-450 hover:bg-emerald-500/10'
+                                                }`}
+                                                disabled={isExpired}
+                                                title={alert.is_active ? 'Desativar alerta' : 'Ativar alerta'}
+                                              >
+                                                {alert.is_active ? 'Desativar' : 'Ativar'}
+                                              </Button>
+                                              
+                                              <Button
+                                                onClick={() => {
+                                                  setEditingAlert(alert);
+                                                  setAlertFormTitle(alert.title);
+                                                  setAlertFormType(alert.alert_type);
+                                                  setAlertFormDescription(alert.description);
+                                                  setAlertFormExpirationType(alert.expires_at ? 'scheduled' : 'manual');
+                                                  setAlertFormExpiresAt(alert.expires_at ? new Date(new Date(alert.expires_at).getTime() - new Date().getTimezoneOffset() * 60 * 1000).toISOString().slice(0, 16) : '');
+                                                  setIsAlertModalOpen(true);
+                                                }}
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-8 w-8 text-indigo-400 hover:text-indigo-300 hover:bg-indigo-500/10 rounded-lg"
+                                                title="Editar Alerta"
+                                              >
+                                                <Edit2 className="h-3.5 w-3.5" />
+                                              </Button>
+                                            </>
+                                          )}
+ 
                                           <Button
                                             onClick={() => handleDeleteAlert(alert.id)}
                                             variant="ghost"
