@@ -54,6 +54,7 @@ import {
   Activity,
   Eye
 } from 'lucide-react';
+import * as Icons from 'lucide-react';
 import Link from 'next/link';
 import IntradetectorLogo from '@/components/intradetector-logo';
 import FormBuilder from '@/components/form-builder';
@@ -68,6 +69,15 @@ const COMMON_ICONS = [
   { value: 'Wifi', label: 'Provedores de Internet' },
   { value: 'Globe', label: 'IPTV / Geral' },
 ];
+
+// Helper to render category icon
+function renderCategoryIcon(iconName: string) {
+  const IconComponent = (Icons as any)[iconName];
+  if (IconComponent) {
+    return <IconComponent className="h-4 w-4 text-indigo-400" />;
+  }
+  return <Icons.Globe className="h-4 w-4 text-indigo-400" />;
+}
 
 export default function AdminPage() {
   const router = useRouter();
@@ -186,6 +196,15 @@ export default function AdminPage() {
   const [alertFormExpirationType, setAlertFormExpirationType] = useState<'manual' | 'scheduled'>('manual');
   const [alertFormExpiresAt, setAlertFormExpiresAt] = useState('');
   const [isSavingAlert, setIsSavingAlert] = useState(false);
+
+  // --- SERVICE CATEGORIES STATE ---
+  const [categoriesList, setCategoriesList] = useState<any[]>([]);
+  const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
+  const [editingCategory, setEditingCategory] = useState<any | null>(null);
+  const [categoryFormName, setCategoryFormName] = useState('');
+  const [categoryFormIcon, setCategoryFormIcon] = useState('Globe');
+  const [categoryFormCustomIcon, setCategoryFormCustomIcon] = useState('');
+  const [isSavingCategory, setIsSavingCategory] = useState(false);
 
   useEffect(() => {
     setIsMounted(true);
@@ -308,6 +327,32 @@ export default function AdminPage() {
         setLastManualAlertInactiveAt(alertConfigSettingData.value?.lastManualAlertInactiveAt ?? null);
       }
 
+      // Fetch dynamic service categories
+      const { data: categoriesSettingData } = await supabase
+        .from('settings')
+        .select('*')
+        .eq('key', 'service_categories')
+        .single();
+
+      let loadedCategories = [];
+      if (categoriesSettingData) {
+        loadedCategories = categoriesSettingData.value || [];
+      } else {
+        // Seed default categories if not initialized yet
+        loadedCategories = [
+          { id: 'redes-sociais', name: 'Redes Sociais', icon_name: 'MessageSquare' },
+          { id: 'streaming', name: 'Streaming', icon_name: 'Tv' },
+          { id: 'jogos', name: 'Jogos', icon_name: 'Gamepad2' },
+          { id: 'iptv-provedores', name: 'IPTV & Provedores', icon_name: 'Globe' }
+        ];
+        await supabase.from('settings').upsert({
+          key: 'service_categories',
+          value: loadedCategories,
+          updated_at: new Date().toISOString()
+        });
+      }
+      setCategoriesList(loadedCategories);
+
       // 5. Fetch Action Logs
       const { data: logsData, error: logsError } = await supabase
         .from('action_logs')
@@ -357,12 +402,14 @@ export default function AdminPage() {
         }
         setCurrentUserProfile(profile);
 
-        // If the profile is admin, automatically set settingsSubTab to the first allowed tab
+        // If the profile is admin, automatically set settingsSubTab to the first allowed tab only if the current tab is not allowed
         if (profile.role === 'admin') {
           const allowedTabs = Object.entries(profile.permissions || {})
             .filter(([_, allowed]) => allowed && allowed !== 'none')
             .map(([tab]) => tab);
-          if (allowedTabs.length > 0) {
+          
+          const isCurrentTabAllowed = allowedTabs.includes(settingsSubTab);
+          if (!isCurrentTabAllowed && allowedTabs.length > 0) {
             const tabMap: Record<string, 'cards' | 'form' | 'rules' | 'alerts' | 'logs' | 'users'> = {
               cards: 'cards',
               form: 'form',
@@ -428,9 +475,8 @@ export default function AdminPage() {
   const handleOpenAddService = () => {
     setEditingService(null);
     setServiceFormName('');
-    setServiceFormCategory('Redes Sociais');
-    setServiceFormIcon('Globe');
-    setServiceFormCustomIcon('');
+    const firstCategory = categoriesList.length > 0 ? categoriesList[0].name : 'Redes Sociais';
+    setServiceFormCategory(firstCategory);
     setServiceFormStatus('normal');
     setIsServiceModalOpen(true);
   };
@@ -439,17 +485,6 @@ export default function AdminPage() {
     setEditingService(service);
     setServiceFormName(service.name);
     setServiceFormCategory(service.category);
-    
-    // Check if the icon is custom or standard
-    const isStandard = COMMON_ICONS.some(i => i.value === service.icon_name);
-    if (isStandard) {
-      setServiceFormIcon(service.icon_name || 'Globe');
-      setServiceFormCustomIcon('');
-    } else {
-      setServiceFormIcon('custom');
-      setServiceFormCustomIcon(service.icon_name || '');
-    }
-    
     setServiceFormStatus(service.status);
     setIsServiceModalOpen(true);
   };
@@ -471,6 +506,135 @@ export default function AdminPage() {
     }
   };
 
+  // --- CATEGORIES CRUD HANDLERS ---
+  const handleOpenAddCategory = () => {
+    setEditingCategory(null);
+    setCategoryFormName('');
+    setCategoryFormIcon('Globe');
+    setCategoryFormCustomIcon('');
+    setIsCategoryModalOpen(true);
+  };
+
+  const handleOpenEditCategory = (cat: any) => {
+    setEditingCategory(cat);
+    setCategoryFormName(cat.name);
+    
+    const isStandard = COMMON_ICONS.some(i => i.value === cat.icon_name);
+    if (isStandard) {
+      setCategoryFormIcon(cat.icon_name || 'Globe');
+      setCategoryFormCustomIcon('');
+    } else {
+      setCategoryFormIcon('custom');
+      setCategoryFormCustomIcon(cat.icon_name || '');
+    }
+    
+    setIsCategoryModalOpen(true);
+  };
+
+  const handleDeleteCategory = async (catToDelete: any) => {
+    const hasServices = services.some(s => s.category.toLowerCase() === catToDelete.name.toLowerCase());
+    if (hasServices) {
+      toast.error(`Não é possível excluir a categoria "${catToDelete.name}" porque existem serviços cadastrados nela. Altere a categoria desses serviços antes.`);
+      return;
+    }
+
+    if (!confirm(`Deseja realmente excluir a categoria "${catToDelete.name}"?`)) {
+      return;
+    }
+
+    const updatedCategories = categoriesList.filter(c => c.id !== catToDelete.id);
+
+    try {
+      const { error } = await supabase
+        .from('settings')
+        .upsert({
+          key: 'service_categories',
+          value: updatedCategories,
+          updated_at: new Date().toISOString()
+        });
+
+      if (error) throw error;
+
+      await logAction('Excluir categoria', `Categoria: ${catToDelete.name}`);
+      toast.success('Categoria excluída com sucesso!');
+      setCategoriesList(updatedCategories);
+    } catch (err: any) {
+      toast.error(`Erro ao excluir categoria: ${err.message}`);
+    }
+  };
+
+  const handleSaveCategory = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!categoryFormName.trim()) {
+      toast.error('Preencha o nome da categoria.');
+      return;
+    }
+
+    setIsSavingCategory(true);
+    const finalIcon = categoryFormIcon === 'custom' ? categoryFormCustomIcon.trim() : categoryFormIcon;
+
+    const newCategory = {
+      id: editingCategory ? editingCategory.id : crypto.randomUUID(),
+      name: categoryFormName.trim(),
+      icon_name: finalIcon || 'Globe'
+    };
+
+    let updatedCategories = [];
+    if (editingCategory) {
+      updatedCategories = categoriesList.map(c => c.id === editingCategory.id ? newCategory : c);
+    } else {
+      const isDuplicate = categoriesList.some(c => c.name.toLowerCase() === newCategory.name.toLowerCase());
+      if (isDuplicate) {
+        toast.error('Já existe uma categoria com este nome.');
+        setIsSavingCategory(false);
+        return;
+      }
+      updatedCategories = [...categoriesList, newCategory];
+    }
+
+    try {
+      const { error } = await supabase
+        .from('settings')
+        .upsert({
+          key: 'service_categories',
+          value: updatedCategories,
+          updated_at: new Date().toISOString()
+        });
+
+      if (error) throw error;
+
+      if (editingCategory) {
+        const oldName = editingCategory.name;
+        const newName = newCategory.name;
+        const oldIcon = editingCategory.icon_name;
+        const newIcon = newCategory.icon_name;
+
+        if (oldName !== newName || oldIcon !== newIcon) {
+          const { error: serviceUpdateError } = await supabase
+            .from('services')
+            .update({ category: newName, icon_name: newIcon })
+            .eq('category', oldName);
+          
+          if (serviceUpdateError) throw serviceUpdateError;
+        }
+      }
+
+      await logAction(
+        editingCategory ? 'Editar categoria' : 'Criar categoria',
+        `Categoria: ${newCategory.name}, Ícone: ${newCategory.icon_name}`
+      );
+      toast.success(editingCategory ? 'Categoria atualizada com sucesso!' : 'Nova categoria criada!');
+      setCategoriesList(updatedCategories);
+      setIsCategoryModalOpen(false);
+      loadData();
+    } catch (err: any) {
+      toast.error(`Erro ao salvar categoria: ${err.message}`);
+    } finally {
+      setIsSavingCategory(false);
+    }
+  };
+
   const handleSaveService = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -480,12 +644,15 @@ export default function AdminPage() {
     }
 
     setIsSavingService(true);
-    const finalIcon = serviceFormIcon === 'custom' ? serviceFormCustomIcon.trim() : serviceFormIcon;
+    
+    // Resolve service icon resolved dynamically from its category
+    const matchedCategory = categoriesList.find(c => c.name === serviceFormCategory);
+    const finalIcon = matchedCategory ? matchedCategory.icon_name : 'Globe';
 
     const serviceData = {
       name: serviceFormName.trim(),
       category: serviceFormCategory,
-      icon_name: finalIcon || 'Globe',
+      icon_name: finalIcon,
       status: editingService ? editingService.status : 'normal'
     };
 
@@ -1712,13 +1879,23 @@ export default function AdminPage() {
                       </CardDescription>
                     </div>
                     {hasWriteAccess('cards') && (
-                      <Button
-                        onClick={handleOpenAddService}
-                        className="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold gap-1.5 rounded-xl text-xs py-2 px-4 shadow-lg shadow-indigo-600/10 transition-all self-start sm:self-auto"
-                      >
-                        <Plus className="h-4 w-4" />
-                        Novo Serviço
-                      </Button>
+                      <div className="flex items-center gap-2.5 self-start sm:self-auto flex-wrap">
+                        <Button
+                          onClick={handleOpenAddCategory}
+                          variant="outline"
+                          className="border-zinc-800 hover:bg-zinc-900 text-zinc-300 hover:text-white font-semibold gap-1.5 rounded-xl text-xs py-2 px-4 transition-all"
+                        >
+                          <Sliders className="h-4 w-4 text-indigo-400" />
+                          Gerenciar Categorias
+                        </Button>
+                        <Button
+                          onClick={handleOpenAddService}
+                          className="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold gap-1.5 rounded-xl text-xs py-2 px-4 shadow-lg shadow-indigo-600/10 transition-all"
+                        >
+                          <Plus className="h-4 w-4" />
+                          Novo Serviço
+                        </Button>
+                      </div>
                     )}
                   </CardHeader>
                   <CardContent className="pt-6">
@@ -2613,7 +2790,7 @@ export default function AdminPage() {
                 value={serviceFormName}
                 onChange={(e) => setServiceFormName(e.target.value)}
                 placeholder="Ex: Netflix, Discord, Claro Fibra"
-                className="bg-zinc-900 border-zinc-800 text-white placeholder-zinc-500"
+                className="bg-zinc-900 border-zinc-800 text-white placeholder-zinc-550"
                 required
               />
             </div>
@@ -2621,54 +2798,19 @@ export default function AdminPage() {
             {/* Field: Category */}
             <div className="space-y-1.5">
               <Label htmlFor="serviceCategory" className="text-zinc-300 text-xs font-semibold">Categoria *</Label>
-              <Select value={serviceFormCategory} onValueChange={(val) => setServiceFormCategory(val || 'Redes Sociais')}>
+              <Select value={serviceFormCategory} onValueChange={(val) => setServiceFormCategory(val || '')}>
                 <SelectTrigger id="serviceCategory" className="bg-zinc-900 border-zinc-800 text-white">
                   <SelectValue placeholder="Selecione a categoria" />
                 </SelectTrigger>
                 <SelectContent className="bg-zinc-900 border-zinc-800 text-white">
-                  {AVAILABLE_CATEGORIES.map((cat) => (
-                    <SelectItem key={cat} value={cat} className="hover:bg-zinc-800">
-                      {cat}
+                  {categoriesList.map((cat) => (
+                    <SelectItem key={cat.id} value={cat.name} className="hover:bg-zinc-800">
+                      {cat.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
-
-            {/* Field: Icon Select */}
-            <div className="space-y-1.5">
-              <Label htmlFor="serviceIcon" className="text-zinc-300 text-xs font-semibold">Escolher Ícone *</Label>
-              <Select value={serviceFormIcon} onValueChange={(val) => setServiceFormIcon(val || 'Globe')}>
-                <SelectTrigger id="serviceIcon" className="bg-zinc-900 border-zinc-800 text-white">
-                  <SelectValue placeholder="Selecione um ícone padrão" />
-                </SelectTrigger>
-                <SelectContent className="bg-zinc-900 border-zinc-800 text-white">
-                  {COMMON_ICONS.map((icon) => (
-                    <SelectItem key={icon.value} value={icon.value} className="hover:bg-zinc-800">
-                      {icon.label} ({icon.value})
-                    </SelectItem>
-                  ))}
-                  <SelectItem value="custom" className="hover:bg-zinc-800 font-semibold text-indigo-400">
-                    Digite um ícone personalizado...
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Custom Icon Field (conditional) */}
-            {serviceFormIcon === 'custom' && (
-              <div className="space-y-1.5">
-                <Label htmlFor="customIcon" className="text-zinc-300 text-xs font-semibold">Nome do Ícone do Lucide (Ex: Starlink, Tablet)</Label>
-                <Input
-                  id="customIcon"
-                  value={serviceFormCustomIcon}
-                  onChange={(e) => setServiceFormCustomIcon(e.target.value)}
-                  placeholder="Ex: ShieldAlert, Signal, etc."
-                  className="bg-zinc-900 border-zinc-800 text-white placeholder-zinc-550"
-                  required
-                />
-              </div>
-            )}
 
             {/* Modal Buttons */}
             <div className="flex justify-end gap-3 pt-4 border-t border-zinc-800">
@@ -2930,6 +3072,191 @@ export default function AdminPage() {
               </Button>
             </div>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* CATEGORY MANAGEMENT MODAL */}
+      <Dialog open={isCategoryModalOpen} onOpenChange={(open) => !open && setIsCategoryModalOpen(false)}>
+        <DialogContent className="sm:max-w-4xl max-w-4xl w-full bg-zinc-950 border border-zinc-800 text-white rounded-2xl p-6">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold flex items-center gap-2">
+              <Layers className="h-5 w-5 text-indigo-400" />
+              <span>Gerenciamento de Categorias & Ícones</span>
+            </DialogTitle>
+            <DialogDescription className="text-zinc-400 text-xs">
+              Crie novas categorias de serviços, escolha seus ícones representativos e gerencie as existentes. Os ícones serão propagados automaticamente para os cards.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mt-6">
+            {/* COLUMN 1: CATEGORY CREATION/EDITION FORM */}
+            <div className="space-y-4 pr-0 md:pr-4 md:border-r border-zinc-900">
+              <h3 className="text-sm font-semibold text-zinc-200 border-b border-zinc-900 pb-2 flex items-center gap-1.5">
+                <Sliders className="h-4 w-4 text-indigo-400" />
+                <span>{editingCategory ? 'Editar Categoria' : 'Cadastrar Nova Categoria'}</span>
+              </h3>
+              
+              <form onSubmit={handleSaveCategory} className="space-y-4">
+                {/* Field: Category Name */}
+                <div className="space-y-1.5">
+                  <Label htmlFor="catName" className="text-zinc-300 text-xs font-semibold">Nome da Categoria *</Label>
+                  <Input
+                    id="catName"
+                    value={categoryFormName}
+                    onChange={(e) => setCategoryFormName(e.target.value)}
+                    placeholder="Ex: Redes Sociais, Streaming, VPNs"
+                    className="bg-zinc-900 border-zinc-800 text-white placeholder-zinc-550 focus:border-indigo-500 text-sm"
+                    required
+                  />
+                </div>
+
+                {/* Field: Category Icon Preset */}
+                <div className="space-y-1.5">
+                  <Label htmlFor="catIcon" className="text-zinc-300 text-xs font-semibold">Escolher Ícone *</Label>
+                  <Select value={categoryFormIcon} onValueChange={(val) => setCategoryFormIcon(val || 'Globe')}>
+                    <SelectTrigger id="catIcon" className="bg-zinc-900 border-zinc-800 text-white text-sm">
+                      <SelectValue placeholder="Selecione o ícone" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-zinc-900 border-zinc-800 text-white text-sm">
+                      {COMMON_ICONS.map((icon) => (
+                        <SelectItem key={icon.value} value={icon.value} className="hover:bg-zinc-800 cursor-pointer">
+                          <div className="flex items-center gap-2">
+                            {renderCategoryIcon(icon.value)}
+                            <span>{icon.label}</span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                      <SelectItem value="custom" className="hover:bg-zinc-800 cursor-pointer text-indigo-400">
+                        <div className="flex items-center gap-2 font-semibold">
+                          <Plus className="h-3.5 w-3.5" />
+                          <span>Personalizar Ícone (Lucide Name)</span>
+                        </div>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Field: Custom Icon Input (Conditional) */}
+                {categoryFormIcon === 'custom' && (
+                  <div className="space-y-1.5 animate-in fade-in-50 duration-200">
+                    <Label htmlFor="catCustomIcon" className="text-zinc-300 text-xs font-semibold">Nome do Ícone Lucide *</Label>
+                    <Input
+                      id="catCustomIcon"
+                      value={categoryFormCustomIcon}
+                      onChange={(e) => setCategoryFormCustomIcon(e.target.value)}
+                      placeholder="Ex: Server, Shield, Database, Laptop, Radio"
+                      className="bg-zinc-900 border-zinc-800 text-white placeholder-zinc-550 focus:border-indigo-500 text-sm font-mono"
+                      required
+                    />
+                    <p className="text-[10px] text-zinc-500 leading-normal">
+                      Insira o nome exato da classe do ícone do <a href="https://lucide.dev/icons" target="_blank" rel="noreferrer" className="text-indigo-400 hover:underline">Lucide Icons</a> (ex: Server, Laptop, etc.).
+                    </p>
+                  </div>
+                )}
+
+                {/* Submit and Action Buttons */}
+                <div className="flex gap-2 pt-2">
+                  <Button
+                    type="submit"
+                    className="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-xs transition-all py-2 h-9"
+                    disabled={isSavingCategory}
+                  >
+                    {isSavingCategory ? (
+                      <span className="flex items-center justify-center gap-1.5">
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        Salvando...
+                      </span>
+                    ) : (
+                      editingCategory ? 'Salvar Categoria' : 'Criar Categoria'
+                    )}
+                  </Button>
+                  
+                  {editingCategory && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
+                        setEditingCategory(null);
+                        setCategoryFormName('');
+                        setCategoryFormIcon('Globe');
+                        setCategoryFormCustomIcon('');
+                      }}
+                      className="border-zinc-800 hover:bg-zinc-900 text-zinc-400 hover:text-white text-xs px-3 h-9"
+                    >
+                      Cancelar
+                    </Button>
+                  )}
+                </div>
+              </form>
+            </div>
+
+            {/* COLUMN 2: ACTIVE CATEGORIES VIEW */}
+            <div className="space-y-4 flex flex-col min-w-0">
+              <h3 className="text-sm font-semibold text-zinc-200 border-b border-zinc-900 pb-2 flex items-center gap-1.5">
+                <Layers className="h-4 w-4 text-indigo-400" />
+                <span>Categorias Ativas ({categoriesList.length})</span>
+              </h3>
+              
+              <div className="flex-1 max-h-[320px] overflow-y-auto pr-1 space-y-2 custom-scrollbar">
+                {categoriesList.length === 0 ? (
+                  <div className="text-center py-12 text-zinc-550 text-xs">
+                    Nenhuma categoria cadastrada. Adicione uma no formulário ao lado.
+                  </div>
+                ) : (
+                  categoriesList.map((cat) => {
+                    return (
+                      <div 
+                        key={cat.id} 
+                        className="bg-zinc-900/30 hover:bg-zinc-900/60 border border-zinc-900 hover:border-zinc-850 rounded-xl p-3 flex items-center justify-between transition-all"
+                      >
+                        <div className="flex items-center gap-3 min-w-0 flex-1">
+                          <div className="bg-zinc-950 border border-zinc-850 p-2 rounded-lg shrink-0">
+                            {renderCategoryIcon(cat.icon_name)}
+                          </div>
+                          <div className="min-w-0 flex-1 pr-1.5">
+                            <p className="text-sm font-bold text-white break-words leading-tight">{cat.name}</p>
+                            <p className="text-[10px] text-zinc-500 font-mono truncate mt-0.5">{cat.icon_name}</p>
+                          </div>
+                        </div>
+                        
+                        <div className="flex items-center gap-1 shrink-0">
+                          <Button
+                            onClick={() => handleOpenEditCategory(cat)}
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-indigo-400 hover:text-indigo-350 hover:bg-indigo-500/10 rounded-lg"
+                            title="Editar categoria"
+                          >
+                            <Edit2 className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            onClick={() => handleDeleteCategory(cat)}
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-red-400 hover:text-red-350 hover:bg-red-500/10 rounded-lg"
+                            title="Excluir categoria"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="flex justify-end pt-4 border-t border-zinc-900/60 mt-4">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setIsCategoryModalOpen(false)}
+              className="border-zinc-800 hover:bg-zinc-900 text-zinc-400 hover:text-white font-medium text-xs px-6 py-2 rounded-xl"
+            >
+              Fechar
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
