@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { getSupabaseClient } from '@/lib/supabase';
 import { Service, FormSchema } from '@/lib/types';
 import {
@@ -23,7 +23,7 @@ import {
   CommandList,
 } from '@/components/ui/command';
 import { toast } from 'sonner';
-import { Loader2, ChevronsUpDown, Check } from 'lucide-react';
+import { Loader2, ChevronsUpDown, Check, Search, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface ReportModalProps {
@@ -33,6 +33,7 @@ interface ReportModalProps {
   schema: FormSchema;
   onSuccess: () => void;
   activeAlert?: any | null;
+  services: Service[];
 }
 
 // Searchable combobox sub-component
@@ -118,19 +119,46 @@ export default function ReportModal({
   schema,
   onSuccess,
   activeAlert,
+  services,
 }: ReportModalProps) {
   const supabase = getSupabaseClient();
   const [dynamicData, setDynamicData] = useState<Record<string, string>>({});
   const [isResolved, setIsResolved] = useState<string>('false');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [relatedServiceIds, setRelatedServiceIds] = useState<string[]>([]);
+  const [relatedSearch, setRelatedSearch] = useState('');
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
   // Reset form when modal opens or service changes
   useEffect(() => {
     if (isOpen) {
       setDynamicData({});
       setIsResolved('false');
+      setRelatedServiceIds([]);
+      setRelatedSearch('');
+      setIsDropdownOpen(false);
     }
   }, [isOpen, service]);
+
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown on click outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsDropdownOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
+  const availableServices = (services || []).filter(s => s.id !== service?.id);
+  const filteredServices = availableServices.filter(s =>
+    s.name.toLowerCase().includes(relatedSearch.toLowerCase())
+  );
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -148,28 +176,60 @@ export default function ReportModal({
     setIsSubmitting(true);
 
     try {
-      const customFieldsWithAlert = {
+      // Manage visitor session ID in sessionStorage
+      let visitorSessionId = sessionStorage.getItem('visitor_session_id');
+      if (!visitorSessionId) {
+        visitorSessionId = crypto.randomUUID();
+        sessionStorage.setItem('visitor_session_id', visitorSessionId);
+      }
+
+      const customFieldsWithAlert: Record<string, any> = {
         ...dynamicData,
+        visitor_session_id: visitorSessionId,
       };
 
       if (activeAlert) {
         customFieldsWithAlert.active_alert = activeAlert.title;
       }
 
-      const { error } = await supabase.from('reports').insert({
-        service_id: service.id,
-        region: dynamicData['region'] || null,
-        connection_type: dynamicData['connection_type'] || null,
-        issue_type: dynamicData['issue_type'] || null,
-        device: dynamicData['device'] || null,
-        custom_fields: customFieldsWithAlert,
-        tests_done: null,
-        is_resolved: isResolved === 'true',
+      // Build bulk insert data
+      const reportsToInsert = [
+        {
+          service_id: service.id,
+          region: dynamicData['region'] || null,
+          connection_type: dynamicData['connection_type'] || null,
+          issue_type: dynamicData['issue_type'] || null,
+          device: dynamicData['device'] || null,
+          custom_fields: customFieldsWithAlert,
+          tests_done: null,
+          is_resolved: isResolved === 'true',
+        }
+      ];
+
+      // Add related services
+      relatedServiceIds.forEach(id => {
+        reportsToInsert.push({
+          service_id: id,
+          region: dynamicData['region'] || null,
+          connection_type: dynamicData['connection_type'] || null,
+          issue_type: dynamicData['issue_type'] || null,
+          device: dynamicData['device'] || null,
+          custom_fields: customFieldsWithAlert,
+          tests_done: null,
+          is_resolved: isResolved === 'true',
+        });
       });
+
+      const { error } = await supabase.from('reports').insert(reportsToInsert);
 
       if (error) throw error;
 
-      toast.success(`Relato para ${service.name} enviado com sucesso!`);
+      if (relatedServiceIds.length > 0) {
+        toast.success(`Relato para ${service.name} e outros ${relatedServiceIds.length} serviços enviado com sucesso!`);
+      } else {
+        toast.success(`Relato para ${service.name} enviado com sucesso!`);
+      }
+      
       onSuccess();
       onClose();
     } catch (error: any) {
@@ -249,6 +309,92 @@ export default function ReportModal({
                   {opt.label}
                 </button>
               ))}
+            </div>
+          </div>
+
+          {/* Relacionar com outros serviços (Opcional) */}
+          <div className="space-y-2 pt-3.5 border-t border-zinc-900">
+            <Label className="text-zinc-300 text-xs font-semibold block">Relacionar com outros serviços afetados? (Opcional)</Label>
+            
+            {/* Selected items tags */}
+            {relatedServiceIds.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mb-2 max-h-24 overflow-y-auto p-2 bg-zinc-900/35 border border-zinc-900 rounded-lg">
+                {relatedServiceIds.map(id => {
+                  const s = services.find(srv => srv.id === id);
+                  if (!s) return null;
+                  return (
+                    <span key={id} className="inline-flex items-center gap-1 bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-2 py-0.5 rounded text-[11px] font-semibold">
+                      {s.name}
+                      <button
+                        type="button"
+                        onClick={() => setRelatedServiceIds(prev => prev.filter(item => item !== id))}
+                        className="hover:text-indigo-200 transition-colors cursor-pointer ml-1"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </span>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Combobox Search */}
+            <div className="relative" ref={dropdownRef}>
+              <div className="relative">
+                <Search className="absolute left-3 top-2.5 h-4 w-4 text-zinc-500" />
+                <input
+                  type="text"
+                  placeholder="Pesquisar outros serviços afetados..."
+                  value={relatedSearch}
+                  onChange={(e) => {
+                    setRelatedSearch(e.target.value);
+                    setIsDropdownOpen(true);
+                  }}
+                  onFocus={() => setIsDropdownOpen(true)}
+                  className="w-full bg-zinc-900 border border-zinc-800 text-white placeholder-zinc-555 rounded-md h-9 pl-9 pr-8 text-xs focus:outline-none focus:border-zinc-700 transition-all"
+                />
+                {relatedSearch && (
+                  <button
+                    type="button"
+                    onClick={() => setRelatedSearch('')}
+                    className="absolute right-3 top-2.5 text-zinc-500 hover:text-zinc-300 cursor-pointer"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+
+              {isDropdownOpen && (
+                <div className="absolute left-0 right-0 mt-1 max-h-40 overflow-y-auto bg-zinc-900 border border-zinc-800 rounded-md shadow-2xl z-50 py-1 text-xs">
+                  {filteredServices.length === 0 ? (
+                    <div className="py-2.5 text-center text-zinc-500">Nenhum outro serviço encontrado.</div>
+                  ) : (
+                    filteredServices.map(s => {
+                      const isSelected = relatedServiceIds.includes(s.id);
+                      return (
+                        <button
+                          key={s.id}
+                          type="button"
+                          onClick={() => {
+                            if (isSelected) {
+                              setRelatedServiceIds(prev => prev.filter(id => id !== s.id));
+                            } else {
+                              setRelatedServiceIds(prev => [...prev, s.id]);
+                            }
+                          }}
+                          className={cn(
+                            "w-full text-left px-3 py-2 flex items-center justify-between transition-colors hover:bg-zinc-850",
+                            isSelected ? "text-indigo-400 bg-zinc-850/50" : "text-zinc-300"
+                          )}
+                        >
+                          <span>{s.name}</span>
+                          {isSelected && <Check className="h-3.5 w-3.5" />}
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+              )}
             </div>
           </div>
 

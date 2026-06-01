@@ -104,10 +104,25 @@ export default function HomePage() {
   const reportsInWindow = useMemo(() => {
     const windowMs = statusThresholds.windowMinutes * 60 * 1000;
     const cutoff = Date.now() - windowMs;
-    return reports.filter(r => {
+    
+    const activeReports = reports.filter(r => {
       const reportTime = new Date(r.created_at).getTime();
       return reportTime >= cutoff && reportTime > resetTimestamp;
-    }).length;
+    });
+
+    const uniqueSessions = new Set<string>();
+    let fallbackCount = 0;
+
+    activeReports.forEach(r => {
+      const sessionId = r.custom_fields?.visitor_session_id;
+      if (sessionId) {
+        uniqueSessions.add(sessionId);
+      } else {
+        fallbackCount++;
+      }
+    });
+
+    return uniqueSessions.size + fallbackCount;
   }, [reports, statusThresholds.windowMinutes, resetTimestamp]);
 
   const isAutoAlertTriggered = useMemo(() => {
@@ -748,6 +763,7 @@ export default function HomePage() {
         schema={formSchema}
         onSuccess={fetchData}
         activeAlert={resolvedAlert}
+        services={services}
       />
 
       {/* ACTIVE NETWORK ALERT DETAILS MODAL */}
