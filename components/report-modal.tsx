@@ -34,6 +34,7 @@ interface ReportModalProps {
   onSuccess: () => void;
   activeAlert?: any | null;
   services: Service[];
+  showRelatedServices?: boolean;
 }
 
 // Searchable combobox sub-component
@@ -120,6 +121,7 @@ export default function ReportModal({
   onSuccess,
   activeAlert,
   services,
+  showRelatedServices = true,
 }: ReportModalProps) {
   const supabase = getSupabaseClient();
   const [dynamicData, setDynamicData] = useState<Record<string, string>>({});
@@ -313,90 +315,92 @@ export default function ReportModal({
           </div>
 
           {/* Relacionar com outros serviços (Opcional) */}
-          <div className="space-y-2 pt-3.5 border-t border-zinc-900">
-            <Label className="text-zinc-300 text-xs font-semibold block">Relacionar com outros serviços afetados? (Opcional)</Label>
-            
-            {/* Selected items tags */}
-            {relatedServiceIds.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 mb-2 max-h-24 overflow-y-auto p-2 bg-zinc-900/35 border border-zinc-900 rounded-lg">
-                {relatedServiceIds.map(id => {
-                  const s = services.find(srv => srv.id === id);
-                  if (!s) return null;
-                  return (
-                    <span key={id} className="inline-flex items-center gap-1 bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-2 py-0.5 rounded text-[11px] font-semibold">
-                      {s.name}
-                      <button
-                        type="button"
-                        onClick={() => setRelatedServiceIds(prev => prev.filter(item => item !== id))}
-                        className="hover:text-indigo-200 transition-colors cursor-pointer ml-1"
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                    </span>
-                  );
-                })}
-              </div>
-            )}
-
-            {/* Combobox Search */}
-            <div className="relative" ref={dropdownRef}>
-              <div className="relative">
-                <Search className="absolute left-3 top-2.5 h-4 w-4 text-zinc-500" />
-                <input
-                  type="text"
-                  placeholder="Pesquisar outros serviços afetados..."
-                  value={relatedSearch}
-                  onChange={(e) => {
-                    setRelatedSearch(e.target.value);
-                    setIsDropdownOpen(true);
-                  }}
-                  onFocus={() => setIsDropdownOpen(true)}
-                  className="w-full bg-zinc-900 border border-zinc-800 text-white placeholder-zinc-555 rounded-md h-9 pl-9 pr-8 text-xs focus:outline-none focus:border-zinc-700 transition-all"
-                />
-                {relatedSearch && (
-                  <button
-                    type="button"
-                    onClick={() => setRelatedSearch('')}
-                    className="absolute right-3 top-2.5 text-zinc-500 hover:text-zinc-300 cursor-pointer"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                )}
-              </div>
-
-              {isDropdownOpen && (
-                <div className="absolute left-0 right-0 mt-1 max-h-40 overflow-y-auto bg-zinc-900 border border-zinc-800 rounded-md shadow-2xl z-50 py-1 text-xs">
-                  {filteredServices.length === 0 ? (
-                    <div className="py-2.5 text-center text-zinc-500">Nenhum outro serviço encontrado.</div>
-                  ) : (
-                    filteredServices.map(s => {
-                      const isSelected = relatedServiceIds.includes(s.id);
-                      return (
+          {showRelatedServices && (
+            <div className="space-y-2 pt-3.5 border-t border-zinc-900">
+              <Label className="text-zinc-300 text-xs font-semibold block">Relacionar com outros serviços afetados? (Opcional)</Label>
+              
+              {/* Selected items tags */}
+              {relatedServiceIds.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mb-2 max-h-24 overflow-y-auto p-2 bg-zinc-900/35 border border-zinc-900 rounded-lg">
+                  {relatedServiceIds.map(id => {
+                    const s = services.find(srv => srv.id === id);
+                    if (!s) return null;
+                    return (
+                      <span key={id} className="inline-flex items-center gap-1 bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-2 py-0.5 rounded text-[11px] font-semibold">
+                        {s.name}
                         <button
-                          key={s.id}
                           type="button"
-                          onClick={() => {
-                            if (isSelected) {
-                              setRelatedServiceIds(prev => prev.filter(id => id !== s.id));
-                            } else {
-                              setRelatedServiceIds(prev => [...prev, s.id]);
-                            }
-                          }}
-                          className={cn(
-                            "w-full text-left px-3 py-2 flex items-center justify-between transition-colors hover:bg-zinc-850",
-                            isSelected ? "text-indigo-400 bg-zinc-850/50" : "text-zinc-300"
-                          )}
+                          onClick={() => setRelatedServiceIds(prev => prev.filter(item => item !== id))}
+                          className="hover:text-indigo-200 transition-colors cursor-pointer ml-1"
                         >
-                          <span>{s.name}</span>
-                          {isSelected && <Check className="h-3.5 w-3.5" />}
+                          <X className="h-3 w-3" />
                         </button>
-                      );
-                    })
-                  )}
+                      </span>
+                    );
+                  })}
                 </div>
               )}
+
+              {/* Combobox Search */}
+              <div className="relative" ref={dropdownRef}>
+                <div className="relative">
+                  <Search className="absolute left-3 top-2.5 h-4 w-4 text-zinc-500" />
+                  <input
+                    type="text"
+                    placeholder="Pesquisar outros serviços afetados..."
+                    value={relatedSearch}
+                    onChange={(e) => {
+                      setRelatedSearch(e.target.value);
+                      setIsDropdownOpen(true);
+                    }}
+                    onFocus={() => setIsDropdownOpen(true)}
+                    className="w-full bg-zinc-900 border border-zinc-800 text-white placeholder-zinc-555 rounded-md h-9 pl-9 pr-8 text-xs focus:outline-none focus:border-zinc-700 transition-all"
+                  />
+                  {relatedSearch && (
+                    <button
+                      type="button"
+                      onClick={() => setRelatedSearch('')}
+                      className="absolute right-3 top-2.5 text-zinc-500 hover:text-zinc-300 cursor-pointer"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
+
+                {isDropdownOpen && (
+                  <div className="absolute left-0 right-0 mt-1 max-h-40 overflow-y-auto bg-zinc-900 border border-zinc-800 rounded-md shadow-2xl z-50 py-1 text-xs">
+                    {filteredServices.length === 0 ? (
+                      <div className="py-2.5 text-center text-zinc-500">Nenhum outro serviço encontrado.</div>
+                    ) : (
+                      filteredServices.map(s => {
+                        const isSelected = relatedServiceIds.includes(s.id);
+                        return (
+                          <button
+                            key={s.id}
+                            type="button"
+                            onClick={() => {
+                              if (isSelected) {
+                                setRelatedServiceIds(prev => prev.filter(id => id !== s.id));
+                              } else {
+                                setRelatedServiceIds(prev => [...prev, s.id]);
+                              }
+                            }}
+                            className={cn(
+                              "w-full text-left px-3 py-2 flex items-center justify-between transition-colors hover:bg-zinc-850",
+                              isSelected ? "text-indigo-400 bg-zinc-850/50" : "text-zinc-300"
+                            )}
+                          >
+                            <span>{s.name}</span>
+                            {isSelected && <Check className="h-3.5 w-3.5" />}
+                          </button>
+                        );
+                      })
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Botões */}
           <div className="flex justify-end gap-3 pt-4 border-t border-zinc-800">

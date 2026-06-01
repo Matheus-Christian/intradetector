@@ -112,6 +112,7 @@ export default function AdminPage() {
   // --- FORM OPTIONS CONFIG STATE ---
   const [formSchema, setFormSchema] = useState<FormSchema>([]);
   const [isSavingSettings, setIsSavingSettings] = useState(false);
+  const [showRelatedServices, setShowRelatedServices] = useState<boolean>(true);
 
   // --- THRESHOLDS CONFIG STATE ---
   const [thresholdSetting, setThresholdSetting] = useState<Setting | null>(null);
@@ -245,6 +246,17 @@ export default function AdminPage() {
       if (settingsData) {
         setFormSetting(settingsData);
         setFormSchema(settingsData.value as FormSchema);
+      }
+
+      // Fetch form config for showRelatedServices toggle
+      const { data: formConfigSettingData } = await supabase
+        .from('settings')
+        .select('*')
+        .eq('key', 'form_config')
+        .single();
+
+      if (formConfigSettingData) {
+        setShowRelatedServices(formConfigSettingData.value?.showRelatedServices ?? true);
       }
 
       // 4. Fetch Status Thresholds Settings
@@ -535,7 +547,19 @@ export default function AdminPage() {
         });
 
       if (error) throw error;
-      await logAction('Atualizar Construtor de Formulário', `Campos: ${cleanedSchema.map(f => f.label).join(', ')}`);
+
+      // Upsert form configuration setting (showRelatedServices)
+      const { error: configError } = await supabase
+        .from('settings')
+        .upsert({
+          key: 'form_config',
+          value: { showRelatedServices },
+          updated_at: new Date().toISOString()
+        });
+
+      if (configError) throw configError;
+
+      await logAction('Atualizar Construtor de Formulário', `Campos: ${cleanedSchema.map(f => f.label).join(', ')}, Permitir Multisserviço: ${showRelatedServices}`);
       toast.success('Esquema do formulário salvo e sincronizado!');
     } catch (err: any) {
       toast.error(`Erro ao salvar: ${err.message}`);
@@ -1774,6 +1798,28 @@ export default function AdminPage() {
                     <form onSubmit={handleSaveSettings} className="space-y-6">
                       
                       <FormBuilder schema={formSchema} onChange={hasWriteAccess('form') ? setFormSchema : () => {}} />
+
+                      {/* CONFIGURAÇÃO DE EXIBIÇÃO DE SERVIÇOS RELACIONADOS */}
+                      <div className="p-4 bg-zinc-900/35 border border-zinc-900 rounded-xl space-y-4 pt-4 mt-4">
+                        <div className="flex items-center justify-between">
+                          <div className="space-y-1 pr-4">
+                            <Label htmlFor="showRelatedServices" className="text-sm font-semibold text-zinc-200 cursor-pointer">
+                              Permitir Relatos Correlacionados (Multisserviço)
+                            </Label>
+                            <p className="text-xs text-zinc-500">
+                              Exibe a opção "Relacionar com outros serviços afetados?" no formulário público, permitindo a correlação de múltiplos serviços em um único envio.
+                            </p>
+                          </div>
+                          <input
+                            id="showRelatedServices"
+                            type="checkbox"
+                            checked={showRelatedServices}
+                            disabled={!hasWriteAccess('form')}
+                            onChange={(e) => setShowRelatedServices(e.target.checked)}
+                            className="rounded border-zinc-800 bg-zinc-900 text-indigo-600 focus:ring-indigo-500 h-5 w-5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                          />
+                        </div>
+                      </div>
 
                       {hasWriteAccess('form') && (
                         <div className="flex justify-end pt-4 border-t border-zinc-900">

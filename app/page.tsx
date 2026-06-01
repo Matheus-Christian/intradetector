@@ -77,6 +77,7 @@ export default function HomePage() {
   const [isAlertDetailOpen, setIsAlertDetailOpen] = useState(false);
   const [onlineCount, setOnlineCount] = useState<number>(1);
   const [alertConfig, setAlertConfig] = useState<any>(null);
+  const [showRelatedServices, setShowRelatedServices] = useState<boolean>(true);
 
   const resetTimestamp = useMemo(() => {
     let maxTime = 0;
@@ -249,6 +250,11 @@ export default function HomePage() {
         const schemaSetting = settingsData.find(s => s.key === 'form_schema');
         if (schemaSetting) setFormSchema(schemaSetting.value as FormSchema);
 
+        const formConfigSetting = settingsData.find(s => s.key === 'form_config');
+        if (formConfigSetting) {
+          setShowRelatedServices(formConfigSetting.value?.showRelatedServices ?? true);
+        }
+
         const thresholds = settingsData.find(s => s.key === 'status_thresholds');
         if (thresholds) {
           setStatusThresholds({
@@ -324,6 +330,10 @@ export default function HomePage() {
           if (updatedSetting.key === 'form_schema') {
             setFormSchema(updatedSetting.value as FormSchema);
             toast.success('Campos do formulário atualizados pelo administrador!');
+          }
+          if (updatedSetting.key === 'form_config') {
+            setShowRelatedServices(updatedSetting.value?.showRelatedServices ?? true);
+            toast.info('Configurações de formulário atualizadas!');
           }
           if (updatedSetting.key === 'status_thresholds') {
             setStatusThresholds({
@@ -764,6 +774,7 @@ export default function HomePage() {
         onSuccess={fetchData}
         activeAlert={resolvedAlert}
         services={services}
+        showRelatedServices={showRelatedServices}
       />
 
       {/* ACTIVE NETWORK ALERT DETAILS MODAL */}
