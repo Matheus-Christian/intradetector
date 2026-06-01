@@ -75,6 +75,69 @@ export default function HomePage() {
   const [autoCloseInterval, setAutoCloseInterval] = useState<number>(60); // seconds
   const [activeAlert, setActiveAlert] = useState<any | null>(null);
   const [isAlertDetailOpen, setIsAlertDetailOpen] = useState(false);
+  const [onlineCount, setOnlineCount] = useState<number>(1);
+  const [alertConfig, setAlertConfig] = useState<any>(null);
+
+  const resetTimestamp = useMemo(() => {
+    let maxTime = 0;
+    
+    // 1. From database config lastManualAlertInactiveAt
+    if (alertConfig?.lastManualAlertInactiveAt) {
+      maxTime = Math.max(maxTime, new Date(alertConfig.lastManualAlertInactiveAt).getTime());
+    }
+    
+    // 2. From all alerts in networkAlerts that are inactive or expired
+    networkAlerts.forEach((a: any) => {
+      const isExpired = a.expires_at && new Date(a.expires_at).getTime() < Date.now();
+      if (!a.is_active) {
+        const end = new Date(a.updated_at || a.created_at).getTime();
+        if (end > maxTime) maxTime = end;
+      } else if (isExpired) {
+        const end = new Date(a.expires_at).getTime();
+        if (end > maxTime) maxTime = end;
+      }
+    });
+    
+    return maxTime;
+  }, [networkAlerts, alertConfig]);
+
+  const reportsInWindow = useMemo(() => {
+    const windowMs = statusThresholds.windowMinutes * 60 * 1000;
+    const cutoff = Date.now() - windowMs;
+    return reports.filter(r => {
+      const reportTime = new Date(r.created_at).getTime();
+      return reportTime >= cutoff && reportTime > resetTimestamp;
+    }).length;
+  }, [reports, statusThresholds.windowMinutes, resetTimestamp]);
+
+  const isAutoAlertTriggered = useMemo(() => {
+    if (!alertConfig || !alertConfig.autoEnabled) return false;
+    
+    const hasActiveManual = activeAlert !== null;
+    if (hasActiveManual) return false;
+
+    const minReports = alertConfig.autoMinReports ?? 5;
+    const percentage = alertConfig.autoPercentage ?? 50;
+
+    const computedPercentage = (reportsInWindow / onlineCount) * 100;
+
+    return reportsInWindow >= minReports && computedPercentage >= percentage;
+  }, [reportsInWindow, onlineCount, alertConfig, activeAlert]);
+
+  const resolvedAlert = useMemo(() => {
+    if (activeAlert) return activeAlert;
+    if (isAutoAlertTriggered && alertConfig) {
+      return {
+        id: 'auto-alert',
+        title: alertConfig.autoTitle || 'Detecção Automática de Instabilidade',
+        alert_type: 'Detecção Automática',
+        description: alertConfig.autoDescription || 'Alto volume de relatos detectado na rede pública.',
+        created_at: new Date().toISOString(),
+        is_active: true
+      };
+    }
+    return null;
+  }, [activeAlert, isAutoAlertTriggered, alertConfig]);
 
   // Hydration guard for Recharts
   const [isMounted, setIsMounted] = useState(false);
@@ -90,7 +153,7 @@ export default function HomePage() {
 
   // Periodic Alert Triggering
   useEffect(() => {
-    if (!activeAlert) return;
+    if (!resolvedAlert) return;
 
     const showAlertMessage = () => {
       setIsAlertDetailOpen(true);
@@ -98,9 +161,9 @@ export default function HomePage() {
         <div className="flex flex-col gap-1">
           <span className="font-bold text-amber-500 flex items-center gap-1.5">
             <Icons.AlertTriangle className="h-4 w-4 animate-bounce" />
-            {activeAlert.title} ({activeAlert.alert_type})
+            {resolvedAlert.title} ({resolvedAlert.alert_type})
           </span>
-          <span className="text-xs text-zinc-300">{activeAlert.description}</span>
+          <span className="text-xs text-zinc-300">{resolvedAlert.description}</span>
         </div>,
         { duration: 8000 }
       );
@@ -119,7 +182,7 @@ export default function HomePage() {
       clearTimeout(timer);
       clearInterval(interval);
     };
-  }, [activeAlert, displayInterval]);
+  }, [resolvedAlert, displayInterval]);
 
   // Auto-close alert popup after configured seconds
   useEffect(() => {
@@ -199,6 +262,7 @@ export default function HomePage() {
 
         const alertConfigSetting = settingsData.find(s => s.key === 'network_alert_config');
         if (alertConfigSetting) {
+          setAlertConfig(alertConfigSetting.value);
           setDisplayInterval(alertConfigSetting.value?.displayInterval ?? 10);
           setAutoCloseInterval(alertConfigSetting.value?.autoCloseInterval ?? 60);
         }
@@ -269,6 +333,7 @@ export default function HomePage() {
             toast.info('Alertas de rede atualizados!');
           }
           if (updatedSetting.key === 'network_alert_config') {
+            setAlertConfig(updatedSetting.value);
             setDisplayInterval(updatedSetting.value?.displayInterval ?? 10);
             setAutoCloseInterval(updatedSetting.value?.autoCloseInterval ?? 60);
             toast.info('Configurações de alerta atualizadas!');
@@ -289,10 +354,26 @@ export default function HomePage() {
       )
       .subscribe();
 
+    // 7. Subscribe to Realtime Presence for visitor count
+    const presenceChannel = supabase.channel('site_presence');
+    presenceChannel
+      .on('presence', { event: 'sync' }, () => {
+        const state = presenceChannel.presenceState();
+        const count = Object.keys(state).length;
+        setOnlineCount(count > 0 ? count : 1);
+      })
+      .subscribe(async (status) => {
+        if (status === 'SUBSCRIBED') {
+          const tempUserId = Math.random().toString(36).substring(7);
+          await presenceChannel.track({ online_at: new Date().toISOString(), user_id: tempUserId });
+        }
+      });
+
     return () => {
       supabase.removeChannel(reportsChannel);
       supabase.removeChannel(settingsChannel);
       supabase.removeChannel(servicesChannel);
+      supabase.removeChannel(presenceChannel);
     };
   }, [services.length, supabase]);
 
@@ -414,7 +495,7 @@ export default function HomePage() {
       <header className="sticky top-0 z-50 border-b border-zinc-900 bg-zinc-950/80 backdrop-blur-md px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <IntradetectorLogo size="lg" showTagline={true} />
-          {activeAlert && (
+           {resolvedAlert && (
             <button
               onClick={() => setIsAlertDetailOpen(true)}
               className="flex items-center gap-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/20 px-3 py-1.5 rounded-full transition-all duration-300 animate-pulse cursor-pointer group shadow-lg shadow-amber-500/5 ml-2"
@@ -666,7 +747,7 @@ export default function HomePage() {
         service={selectedService}
         schema={formSchema}
         onSuccess={fetchData}
-        activeAlert={activeAlert}
+        activeAlert={resolvedAlert}
       />
 
       {/* ACTIVE NETWORK ALERT DETAILS MODAL */}
@@ -675,27 +756,27 @@ export default function HomePage() {
           {/* Subtle red ambient glow inside modal */}
           <div className="absolute -top-12 -left-12 w-32 h-32 bg-amber-500/10 rounded-full blur-2xl pointer-events-none" />
 
-          {activeAlert && (
+          {resolvedAlert && (
             <>
               <DialogHeader>
                 <div className="flex items-center gap-2 mb-2">
                   <Badge variant="outline" className="border-amber-500/30 text-amber-400 text-[10px] uppercase font-bold tracking-widest flex gap-1 items-center bg-amber-500/5">
                     <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-ping mr-1" />
-                    {activeAlert.alert_type}
+                    {resolvedAlert.alert_type}
                   </Badge>
                 </div>
                 <DialogTitle className="text-xl font-extrabold flex items-center gap-2 text-white leading-tight">
                   <Icons.AlertTriangle className="h-5 w-5 text-amber-500 animate-bounce" />
-                  <span>{activeAlert.title}</span>
+                  <span>{resolvedAlert.title}</span>
                 </DialogTitle>
                 <DialogDescription className="text-zinc-500 text-[11px] pt-1">
-                  Publicado em {new Date(activeAlert.created_at).toLocaleString('pt-BR')}
+                  Publicado em {new Date(resolvedAlert.created_at).toLocaleString('pt-BR')}
                 </DialogDescription>
               </DialogHeader>
 
               <div className="mt-4 space-y-4 relative z-10">
-                <div className="bg-zinc-900/60 border border-zinc-800 rounded-xl p-4 text-zinc-300 text-sm leading-relaxed">
-                  {activeAlert.description}
+                <div className="bg-zinc-900/60 border border-zinc-850 rounded-xl p-4 text-zinc-300 text-sm leading-relaxed whitespace-pre-wrap">
+                  {resolvedAlert.description}
                 </div>
 
                 <div className="bg-amber-500/5 border border-amber-500/10 rounded-xl p-3.5 flex items-start gap-3">

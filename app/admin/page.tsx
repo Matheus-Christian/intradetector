@@ -162,8 +162,21 @@ export default function AdminPage() {
   const [displayInterval, setDisplayInterval] = useState<number>(10); // default 10 mins
   const [autoCloseInterval, setAutoCloseInterval] = useState<number>(60); // default 60 seconds
   const [isSavingAlertsConfig, setIsSavingAlertsConfig] = useState(false);
+  const [autoAlertEnabled, setAutoAlertEnabled] = useState<boolean>(false);
+  const [autoAlertPercentage, setAutoAlertPercentage] = useState<number>(50);
+  const [autoAlertMinReports, setAutoAlertMinReports] = useState<number>(5);
+  const [autoAlertTitle, setAutoAlertTitle] = useState<string>('Detecção Automática de Instabilidade');
+  const [autoAlertDescription, setAutoAlertDescription] = useState<string>('Alto volume de relatos detectado na rede pública.');
+  const [lastManualAlertInactiveAt, setLastManualAlertInactiveAt] = useState<string | null>(null);
   const [isAlertModalOpen, setIsAlertModalOpen] = useState(false);
   const [editingAlert, setEditingAlert] = useState<any | null>(null); // null means new alert
+
+  const hasActiveManualAlert = useMemo(() => {
+    return networkAlerts.some((a: any) => {
+      const isExpired = a.expires_at && new Date(a.expires_at).getTime() < Date.now();
+      return a.is_active && !isExpired;
+    });
+  }, [networkAlerts]);
   
   // Alert form fields
   const [alertFormTitle, setAlertFormTitle] = useState('');
@@ -275,6 +288,12 @@ export default function AdminPage() {
       if (alertConfigSettingData) {
         setDisplayInterval(alertConfigSettingData.value?.displayInterval ?? 10);
         setAutoCloseInterval(alertConfigSettingData.value?.autoCloseInterval ?? 60);
+        setAutoAlertEnabled(alertConfigSettingData.value?.autoEnabled ?? false);
+        setAutoAlertPercentage(alertConfigSettingData.value?.autoPercentage ?? 50);
+        setAutoAlertMinReports(alertConfigSettingData.value?.autoMinReports ?? 5);
+        setAutoAlertTitle(alertConfigSettingData.value?.autoTitle ?? 'Detecção Automática de Instabilidade');
+        setAutoAlertDescription(alertConfigSettingData.value?.autoDescription ?? 'Alto volume de relatos detectado na rede pública.');
+        setLastManualAlertInactiveAt(alertConfigSettingData.value?.lastManualAlertInactiveAt ?? null);
       }
 
       // 5. Fetch Action Logs
@@ -572,12 +591,21 @@ export default function AdminPage() {
         .from('settings')
         .upsert({
           key: 'network_alert_config',
-          value: { displayInterval, autoCloseInterval },
+          value: { 
+            displayInterval, 
+            autoCloseInterval,
+            autoEnabled: autoAlertEnabled,
+            autoPercentage: autoAlertPercentage,
+            autoMinReports: autoAlertMinReports,
+            autoTitle: autoAlertTitle,
+            autoDescription: autoAlertDescription,
+            lastManualAlertInactiveAt
+          },
           updated_at: new Date().toISOString()
         });
 
       if (error) throw error;
-      await logAction('Configurar Alertas', `Intervalo: ${displayInterval}m, Auto-fechar: ${autoCloseInterval}s`);
+      await logAction('Configurar Alertas', `Intervalo: ${displayInterval}m, Auto-fechar: ${autoCloseInterval}s, Auto-Habilitado: ${autoAlertEnabled}`);
       toast.success('Configurações de alerta salvas!');
     } catch (err: any) {
       toast.error(`Erro ao salvar: ${err.message}`);
@@ -654,6 +682,28 @@ export default function AdminPage() {
         });
 
       if (error) throw error;
+
+      if (currentStatus) {
+        const inactiveTime = new Date().toISOString();
+        setLastManualAlertInactiveAt(inactiveTime);
+        await supabase
+          .from('settings')
+          .upsert({
+            key: 'network_alert_config',
+            value: { 
+              displayInterval, 
+              autoCloseInterval,
+              autoEnabled: autoAlertEnabled,
+              autoPercentage: autoAlertPercentage,
+              autoMinReports: autoAlertMinReports,
+              autoTitle: autoAlertTitle,
+              autoDescription: autoAlertDescription,
+              lastManualAlertInactiveAt: inactiveTime
+            },
+            updated_at: new Date().toISOString()
+          });
+      }
+
       toast.success(currentStatus ? 'Alerta desativado!' : 'Alerta ativado!');
       setNetworkAlerts(updatedAlerts);
     } catch (err: any) {
@@ -662,6 +712,9 @@ export default function AdminPage() {
   };
 
   const handleDeleteAlert = async (id: string) => {
+    const alertToDelete = networkAlerts.find(a => a.id === id);
+    if (!alertToDelete) return;
+
     if (!confirm('Deseja realmente deletar este alerta do histórico?')) return;
 
     const updatedAlerts = networkAlerts.filter(a => a.id !== id);
@@ -676,6 +729,31 @@ export default function AdminPage() {
         });
 
       if (error) throw error;
+
+      const isExpired = alertToDelete.expires_at && new Date(alertToDelete.expires_at).getTime() < Date.now();
+      const wasActive = alertToDelete.is_active && !isExpired;
+
+      if (wasActive) {
+        const inactiveTime = new Date().toISOString();
+        setLastManualAlertInactiveAt(inactiveTime);
+        await supabase
+          .from('settings')
+          .upsert({
+            key: 'network_alert_config',
+            value: { 
+              displayInterval, 
+              autoCloseInterval,
+              autoEnabled: autoAlertEnabled,
+              autoPercentage: autoAlertPercentage,
+              autoMinReports: autoAlertMinReports,
+              autoTitle: autoAlertTitle,
+              autoDescription: autoAlertDescription,
+              lastManualAlertInactiveAt: inactiveTime
+            },
+            updated_at: new Date().toISOString()
+          });
+      }
+
       toast.success('Alerta deletado com sucesso!');
       setNetworkAlerts(updatedAlerts);
     } catch (err: any) {
@@ -1131,9 +1209,13 @@ export default function AdminPage() {
                               <div className="flex flex-col sm:flex-row sm:items-center gap-1.5">
                                 <span>{svcName}</span>
                                 {report.custom_fields?.active_alert && (
-                                  <Badge className="bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[9px] px-1.5 py-0 rounded-md w-fit font-medium">
-                                    {report.custom_fields.active_alert}
-                                  </Badge>
+                                  <div className="flex flex-col sm:flex-row gap-1">
+                                    {String(report.custom_fields.active_alert).split(' | ').map((tag, idx) => (
+                                      <Badge key={idx} className="bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[9px] px-1.5 py-0 rounded-md w-fit font-medium whitespace-nowrap">
+                                        {tag}
+                                      </Badge>
+                                    ))}
+                                  </div>
                                 )}
                               </div>
                             </TableCell>
@@ -1446,9 +1528,13 @@ export default function AdminPage() {
                                 <div className="flex flex-col sm:flex-row sm:items-center gap-1.5">
                                   <span>{svcName}</span>
                                   {report.custom_fields?.active_alert && (
-                                    <Badge className="bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[9px] px-1.5 py-0 rounded-md w-fit font-medium">
-                                      {report.custom_fields.active_alert}
-                                    </Badge>
+                                    <div className="flex flex-col sm:flex-row gap-1">
+                                      {String(report.custom_fields.active_alert).split(' | ').map((tag, idx) => (
+                                        <Badge key={idx} className="bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[9px] px-1.5 py-0 rounded-md w-fit font-medium whitespace-nowrap">
+                                          {tag}
+                                        </Badge>
+                                      ))}
+                                    </div>
                                   )}
                                 </div>
                               </TableCell>
@@ -1945,6 +2031,166 @@ export default function AdminPage() {
                               disabled={isSavingAlertsConfig}
                             >
                               {isSavingAlertsConfig ? 'Salvando...' : 'Salvar Configuração'}
+                            </Button>
+                          </div>
+                        )}
+                      </form>
+                    </CardContent>
+                  </Card>
+
+                  {/* DETECÇÃO AUTOMÁTICA DE ALERTAS */}
+                  <Card className="bg-zinc-950/60 border-zinc-900 text-white">
+                    <CardHeader>
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                        <CardTitle className="text-xl font-bold flex items-center gap-2">
+                          <Activity className="h-5 w-5 text-indigo-400" />
+                          Detecção Automática de Alertas
+                        </CardTitle>
+                        {!hasWriteAccess('alerts') && (
+                          <Badge className="bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[10px] px-2 py-0.5 rounded-md font-semibold select-none flex gap-1 items-center">
+                            <Eye className="h-3 w-3" /> Apenas Visualização
+                          </Badge>
+                        )}
+                      </div>
+                      <CardDescription className="text-zinc-500 mt-1">
+                        Configure as regras para geração automática de sinal de alerta com base na porcentagem de acessos simultâneos relatando instabilidade.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <form onSubmit={handleSaveAlertConfig} className="space-y-6">
+                        
+                        {/* Toggle & Informative Warning */}
+                        <div className="space-y-4">
+                          <div className="flex items-center justify-between p-3.5 bg-zinc-900/30 border border-zinc-900 rounded-xl">
+                            <div className="space-y-1 pr-4">
+                              <Label htmlFor="autoAlertEnabled" className="text-sm font-semibold text-zinc-200 cursor-pointer">
+                                Ativar Detecção Automática
+                              </Label>
+                              <p className="text-xs text-zinc-500">
+                                Monitora relatos públicos em tempo real em relação ao número de usuários online.
+                              </p>
+                            </div>
+                            <input
+                              id="autoAlertEnabled"
+                              type="checkbox"
+                              checked={autoAlertEnabled && !hasActiveManualAlert}
+                              disabled={!hasWriteAccess('alerts') || hasActiveManualAlert}
+                              onChange={(e) => setAutoAlertEnabled(e.target.checked)}
+                              className="rounded border-zinc-800 bg-zinc-900 text-indigo-600 focus:ring-indigo-500 h-5 w-5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                            />
+                          </div>
+
+                          {/* Mensagem explicativa de intertravamento */}
+                          {hasActiveManualAlert ? (
+                            <div className="p-3.5 bg-amber-500/5 border border-amber-500/10 rounded-xl text-xs flex gap-2.5 text-amber-400 leading-relaxed">
+                              <AlertCircle className="h-5 w-5 shrink-0 animate-pulse" />
+                              <div>
+                                <strong>Detecção automática suspensa temporariamente:</strong> Há um alerta manual ativo no momento. 
+                                O sistema desabilitou o alerta automático e reativará sua execução de forma totalmente automática assim que o alerta manual for desativado ou expirar.
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="p-3.5 bg-zinc-900/30 border border-zinc-900 rounded-xl text-xs flex gap-2.5 text-zinc-400 leading-relaxed">
+                              <AlertCircle className="h-5 w-5 shrink-0 text-zinc-500" />
+                              <div>
+                                <strong>Nota de Convivência de Alertas:</strong> A detecção automática é suspensa automaticamente se houver um alerta manual ativo. 
+                                Ela será reativada de forma automática assim que o alerta manual for desativado ou expirar.
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Numeric Thresholds */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2 border-t border-zinc-900">
+                          <div className="space-y-2">
+                            <Label htmlFor="autoAlertPercentage" className="text-zinc-300 font-semibold text-sm">
+                              Porcentagem Mínima de Acessos (%)
+                            </Label>
+                            <Input
+                              id="autoAlertPercentage"
+                              type="number"
+                              min={1}
+                              max={100}
+                              value={autoAlertPercentage}
+                              onChange={(e) => setAutoAlertPercentage(Number(e.target.value))}
+                              className="bg-zinc-900 border-zinc-800 text-white focus:border-indigo-500"
+                              disabled={!hasWriteAccess('alerts') || hasActiveManualAlert}
+                              required
+                            />
+                            <p className="text-xs text-zinc-500">
+                              % mínima de visitantes concorrentes enviando relatos (ex: 50%).
+                            </p>
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label htmlFor="autoAlertMinReports" className="text-zinc-300 font-semibold text-sm">
+                              Volume Mínimo de Relatos (X)
+                            </Label>
+                            <Input
+                              id="autoAlertMinReports"
+                              type="number"
+                              min={1}
+                              value={autoAlertMinReports}
+                              onChange={(e) => setAutoAlertMinReports(Number(e.target.value))}
+                              className="bg-zinc-900 border-zinc-800 text-white focus:border-indigo-500"
+                              disabled={!hasWriteAccess('alerts') || hasActiveManualAlert}
+                              required
+                            />
+                            <p className="text-xs text-zinc-500">
+                              Quantidade bruta mínima de relatos no período (ex: 5 relatos).
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Title and Description */}
+                        <div className="space-y-4 pt-4 border-t border-zinc-900">
+                          <div className="space-y-2">
+                            <Label htmlFor="autoAlertTitle" className="text-zinc-300 font-semibold text-sm">
+                              Título do Alerta Automático
+                            </Label>
+                            <Input
+                              id="autoAlertTitle"
+                              type="text"
+                              value={autoAlertTitle}
+                              onChange={(e) => setAutoAlertTitle(e.target.value)}
+                              placeholder="Ex: Instabilidade Geral na Rede"
+                              className="bg-zinc-900 border-zinc-800 text-white focus:border-indigo-500"
+                              disabled={!hasWriteAccess('alerts') || hasActiveManualAlert}
+                              required
+                            />
+                            <p className="text-xs text-zinc-555">
+                              Título que será exibido no aviso visual público.
+                            </p>
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label htmlFor="autoAlertDescription" className="text-zinc-300 font-semibold text-sm">
+                              Descrição Informativa do Alerta Automático
+                            </Label>
+                            <textarea
+                              id="autoAlertDescription"
+                              rows={3}
+                              value={autoAlertDescription}
+                              onChange={(e) => setAutoAlertDescription(e.target.value)}
+                              placeholder="Ex: Identificamos um pico elevado de relatos em nossa rede..."
+                              className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3.5 py-2 text-white text-sm focus:border-indigo-500 focus:outline-none placeholder-zinc-500"
+                              disabled={!hasWriteAccess('alerts') || hasActiveManualAlert}
+                              required
+                            />
+                            <p className="text-xs text-zinc-555">
+                              Mensagem informativa que instrui operadores a acionar o COR ou plantonista do CGR.
+                            </p>
+                          </div>
+                        </div>
+
+                        {hasWriteAccess('alerts') && (
+                          <div className="flex justify-end pt-4 border-t border-zinc-900">
+                            <Button
+                              type="submit"
+                              className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-8 py-2.5 rounded-xl transition-all shadow-lg shadow-indigo-600/20"
+                              disabled={isSavingAlertsConfig}
+                            >
+                              {isSavingAlertsConfig ? 'Salvando...' : 'Salvar Detecção Automática'}
                             </Button>
                           </div>
                         )}
