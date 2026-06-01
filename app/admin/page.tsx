@@ -118,6 +118,16 @@ export default function AdminPage() {
   const [serviceFormCustomIcon, setServiceFormCustomIcon] = useState('');
   const [serviceFormStatus, setServiceFormStatus] = useState<'normal' | 'warning' | 'critical'>('normal');
   const [isSavingService, setIsSavingService] = useState(false);
+  const [searchServicesQuery, setSearchServicesQuery] = useState('');
+
+  const filteredServices = useMemo(() => {
+    if (!searchServicesQuery.trim()) return services;
+    const q = searchServicesQuery.toLowerCase();
+    return services.filter(s => 
+      s.name.toLowerCase().includes(q) || 
+      (s.category && s.category.toLowerCase().includes(q))
+    );
+  }, [services, searchServicesQuery]);
 
   // --- FORM OPTIONS CONFIG STATE ---
   const [formSchema, setFormSchema] = useState<FormSchema>([]);
@@ -1904,52 +1914,82 @@ export default function AdminPage() {
                         Nenhum serviço cadastrado. Adicione um acima.
                       </div>
                     ) : (
-                      <div className="overflow-x-auto rounded-lg border border-zinc-900">
-                        <Table className="bg-zinc-950/80">
-                          <TableHeader className="bg-zinc-900/50 border-zinc-850">
-                            <TableRow className="hover:bg-zinc-900/20">
-                              <TableHead className="text-zinc-400 font-semibold">Nome</TableHead>
-                              <TableHead className="text-zinc-400 font-semibold">Categoria</TableHead>
-                              <TableHead className="text-zinc-400 font-semibold">Ícone</TableHead>
-                              {hasWriteAccess('cards') && (
-                                <TableHead className="text-zinc-400 font-semibold text-right">Ações</TableHead>
-                              )}
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {services.map((service) => {
-                              return (
-                                <TableRow key={service.id} className="hover:bg-zinc-900/30 border-zinc-900">
-                                  <TableCell className="font-bold text-white text-sm">{service.name}</TableCell>
-                                  <TableCell className="text-zinc-300 text-xs">{service.category}</TableCell>
-                                  <TableCell className="text-zinc-400 text-xs font-mono">{service.icon_name || 'Globe'}</TableCell>
+                      <div className="space-y-4">
+                        {/* SEARCH INPUT BAR */}
+                        <div className="relative w-full max-w-sm">
+                          <Icons.Search className="absolute left-3 top-2.5 h-4 w-4 text-zinc-550" />
+                          <Input
+                            type="text"
+                            placeholder="Buscar serviços por nome ou categoria..."
+                            value={searchServicesQuery}
+                            onChange={(e) => setSearchServicesQuery(e.target.value)}
+                            className="pl-9 bg-zinc-900/40 border-zinc-900 focus:border-zinc-800 text-zinc-200 placeholder-zinc-550 text-xs rounded-xl"
+                          />
+                          {searchServicesQuery && (
+                            <button
+                              type="button"
+                              onClick={() => setSearchServicesQuery('')}
+                              className="absolute right-3 top-2.5 hover:text-white text-zinc-500 transition-colors"
+                              title="Limpar pesquisa"
+                            >
+                              <Icons.X className="h-4 w-4" />
+                            </button>
+                          )}
+                        </div>
+
+                        {filteredServices.length === 0 ? (
+                          <div className="text-center py-12 text-zinc-550 border border-zinc-900 rounded-xl bg-zinc-950/30 text-xs">
+                            Nenhum serviço correspondente encontrado para a pesquisa.
+                          </div>
+                        ) : (
+                          <div className="overflow-x-auto rounded-lg border border-zinc-900">
+                            <Table className="bg-zinc-950/80">
+                              <TableHeader className="bg-zinc-900/50 border-zinc-850">
+                                <TableRow className="hover:bg-zinc-900/20">
+                                  <TableHead className="text-zinc-400 font-semibold">Nome</TableHead>
+                                  <TableHead className="text-zinc-400 font-semibold">Categoria</TableHead>
+                                  <TableHead className="text-zinc-400 font-semibold">Ícone</TableHead>
                                   {hasWriteAccess('cards') && (
-                                    <TableCell className="text-right flex justify-end gap-1.5">
-                                      <Button
-                                        onClick={() => handleOpenEditService(service)}
-                                        variant="ghost"
-                                        size="icon"
-                                        className="h-8 w-8 text-indigo-400 hover:text-indigo-300 hover:bg-indigo-500/10 rounded-lg"
-                                        title="Editar Serviço"
-                                      >
-                                        <Edit2 className="h-3.5 w-3.5" />
-                                      </Button>
-                                      <Button
-                                        onClick={() => handleDeleteService(service.id)}
-                                        variant="ghost"
-                                        size="icon"
-                                        className="h-8 w-8 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg"
-                                        title="Excluir Serviço"
-                                      >
-                                        <Trash2 className="h-3.5 w-3.5" />
-                                      </Button>
-                                    </TableCell>
+                                    <TableHead className="text-zinc-400 font-semibold text-right">Ações</TableHead>
                                   )}
                                 </TableRow>
-                              );
-                            })}
-                          </TableBody>
-                        </Table>
+                              </TableHeader>
+                              <TableBody>
+                                {filteredServices.map((service) => {
+                                  return (
+                                    <TableRow key={service.id} className="hover:bg-zinc-900/30 border-zinc-900">
+                                      <TableCell className="font-bold text-white text-sm">{service.name}</TableCell>
+                                      <TableCell className="text-zinc-300 text-xs">{service.category}</TableCell>
+                                      <TableCell className="text-zinc-400 text-xs font-mono">{service.icon_name || 'Globe'}</TableCell>
+                                      {hasWriteAccess('cards') && (
+                                        <TableCell className="text-right flex justify-end gap-1.5">
+                                          <Button
+                                            onClick={() => handleOpenEditService(service)}
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-8 w-8 text-indigo-400 hover:text-indigo-300 hover:bg-indigo-500/10 rounded-lg"
+                                            title="Editar Serviço"
+                                          >
+                                            <Edit2 className="h-3.5 w-3.5" />
+                                          </Button>
+                                          <Button
+                                            onClick={() => handleDeleteService(service.id)}
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-8 w-8 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg"
+                                            title="Excluir Serviço"
+                                          >
+                                            <Trash2 className="h-3.5 w-3.5" />
+                                          </Button>
+                                        </TableCell>
+                                      )}
+                                    </TableRow>
+                                  );
+                                })}
+                              </TableBody>
+                            </Table>
+                          </div>
+                        )}
                       </div>
                     )}
                   </CardContent>
