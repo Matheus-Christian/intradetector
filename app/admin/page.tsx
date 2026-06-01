@@ -1812,20 +1812,7 @@ export default function AdminPage() {
                   Construtor de Formulários
                 </Button>
               )}
-              {hasReadAccess('rules') && (
-                <Button
-                  onClick={() => setSettingsSubTab('rules')}
-                  variant="ghost"
-                  className={`w-full justify-start rounded-xl text-xs font-semibold px-4 py-3 transition-all gap-2 ${
-                    settingsSubTab === 'rules'
-                      ? 'bg-indigo-600/10 text-indigo-400 border border-indigo-500/20 hover:bg-indigo-600/15'
-                      : 'text-zinc-400 hover:text-white hover:bg-zinc-900/40 border border-transparent'
-                  }`}
-                >
-                  <Sliders className="h-4 w-4" />
-                  Regras de Criticidade
-                </Button>
-              )}
+
               {hasReadAccess('alerts') && (
                 <Button
                   onClick={() => setSettingsSubTab('alerts')}
@@ -2061,174 +2048,173 @@ export default function AdminPage() {
                 </Card>
               )}
 
-              {settingsSubTab === 'rules' && (
-                <Card className="bg-zinc-950/60 border-zinc-900 text-white">
-                  <CardHeader>
-                    <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-                      <CardTitle className="text-xl font-bold">Regras de Criticidade (Algoritmo Automático)</CardTitle>
-                      {!hasWriteAccess('rules') && (
-                        <Badge className="bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[10px] px-2 py-0.5 rounded-md font-semibold select-none flex gap-1 items-center">
-                          <Eye className="h-3 w-3" /> Apenas Visualização
-                        </Badge>
-                      )}
-                    </div>
-                    <CardDescription className="text-zinc-550 mt-1">
-                      Defina quantos relatos em um curto período são necessários para disparar alertas visuais no site público.
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <form onSubmit={handleSaveThresholds} className="space-y-6">
-                      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                        {/* Window Minutes */}
-                        <div className="space-y-2">
-                          <Label htmlFor="windowMinutes" className="text-zinc-300 font-semibold text-sm">Janela de Tempo (Minutos)</Label>
-                          <Input
-                            id="windowMinutes"
-                            type="number"
-                            min={1}
-                            value={thresholdWindow}
-                            onChange={(e) => setThresholdWindow(Number(e.target.value))}
-                            className="bg-zinc-900 border-zinc-800 text-white focus:border-indigo-500"
-                            disabled={!hasWriteAccess('rules')}
-                            required
-                          />
-                          <p className="text-xs text-zinc-500">Janela de criticidade de {thresholdWindow} min.</p>
-                        </div>
-
-                        {/* Warning Limit */}
-                        <div className="space-y-2">
-                          <Label htmlFor="warningLimit" className="text-amber-400 font-semibold text-sm">Alerta: Instabilidade (🟡)</Label>
-                          <Input
-                            id="warningLimit"
-                            type="number"
-                            min={1}
-                            value={thresholdWarning}
-                            onChange={(e) => setThresholdWarning(Number(e.target.value))}
-                            className="bg-zinc-900 border-zinc-800 text-amber-400 focus:border-amber-500"
-                            disabled={!hasWriteAccess('rules')}
-                            required
-                          />
-                          <p className="text-xs text-zinc-500">Mínimo para card amarelo.</p>
-                        </div>
-
-                        {/* Critical Limit */}
-                        <div className="space-y-2">
-                          <Label htmlFor="criticalLimit" className="text-red-400 font-semibold text-sm">Crítico: Queda Total (🔴)</Label>
-                          <Input
-                            id="criticalLimit"
-                            type="number"
-                            min={2}
-                            value={thresholdCritical}
-                            onChange={(e) => setThresholdCritical(Number(e.target.value))}
-                            className="bg-zinc-900 border-zinc-800 text-red-400 focus:border-red-500"
-                            disabled={!hasWriteAccess('rules')}
-                            required
-                          />
-                          <p className="text-xs text-zinc-500">Mínimo para card vermelho.</p>
-                        </div>
-
-                        {/* Public Chart Window Limit */}
-                        <div className="space-y-2">
-                          <Label htmlFor="chartWindowHours" className="text-indigo-400 font-semibold text-sm">Janela do Gráfico Público</Label>
-                          <Select 
-                            value={String(chartWindowHours)} 
-                            onValueChange={(val) => setChartWindowHours(Number(val || '24'))}
-                            disabled={!hasWriteAccess('rules')}
-                          >
-                            <SelectTrigger id="chartWindowHours" className="bg-zinc-900 border-zinc-800 text-white focus:border-indigo-500">
-                              <SelectValue placeholder="Selecione" />
-                            </SelectTrigger>
-                            <SelectContent className="bg-zinc-900 border-zinc-800 text-white">
-                              <SelectItem value="4">Últimas 4 Horas</SelectItem>
-                              <SelectItem value="12">Últimas 12 Horas</SelectItem>
-                              <SelectItem value="24">Últimas 24 Horas</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <p className="text-xs text-zinc-500">Exibição na Home pública.</p>
-                        </div>
-                      </div>
-
-                      <div className="border-t border-zinc-900 pt-6 space-y-4">
-                        <h4 className="text-sm font-semibold text-zinc-350 flex items-center gap-1.5">
-                          <Sliders className="h-4 w-4 text-indigo-400" />
-                          Nomes dos Status nos Cards Públicos
-                        </h4>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                          {/* Status Normal Label */}
-                          <div className="space-y-2">
-                            <Label htmlFor="labelNormal" className="text-emerald-400 font-semibold text-sm">Status: Normal (🟢)</Label>
-                            <Input
-                              id="labelNormal"
-                              type="text"
-                              value={labelNormal}
-                              onChange={(e) => setLabelNormal(e.target.value)}
-                              className="bg-zinc-900 border-zinc-800 text-emerald-400 focus:border-emerald-550"
-                              placeholder="Ex: Operando"
-                              disabled={!hasWriteAccess('rules')}
-                              required
-                            />
-                            <p className="text-xs text-zinc-500">Texto para funcionamento normal.</p>
-                          </div>
-
-                          {/* Status Warning Label */}
-                          <div className="space-y-2">
-                            <Label htmlFor="labelWarning" className="text-amber-400 font-semibold text-sm">Status: Instabilidade (🟡)</Label>
-                            <Input
-                              id="labelWarning"
-                              type="text"
-                              value={labelWarning}
-                              onChange={(e) => setLabelWarning(e.target.value)}
-                              className="bg-zinc-900 border-zinc-800 text-amber-400 focus:border-amber-500"
-                              placeholder="Ex: Instabilidade"
-                              disabled={!hasWriteAccess('rules')}
-                              required
-                            />
-                            <p className="text-xs text-zinc-500">Texto para instabilidade.</p>
-                          </div>
-
-                          {/* Status Critical Label */}
-                          <div className="space-y-2">
-                            <Label htmlFor="labelCritical" className="text-red-400 font-semibold text-sm">Status: Queda Total (🔴)</Label>
-                            <Input
-                              id="labelCritical"
-                              type="text"
-                              value={labelCritical}
-                              onChange={(e) => setLabelCritical(e.target.value)}
-                              className="bg-zinc-900 border-zinc-800 text-red-450 focus:border-red-500"
-                              placeholder="Ex: Queda total"
-                              disabled={!hasWriteAccess('rules')}
-                              required
-                            />
-                            <p className="text-xs text-zinc-500">Texto para falha total.</p>
-                          </div>
-                        </div>
-                      </div>
-
-                      {hasWriteAccess('rules') && (
-                        <div className="flex justify-end pt-4 border-t border-zinc-900">
-                          <Button
-                            type="submit"
-                            className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-8 py-2.5 rounded-xl transition-all shadow-lg shadow-indigo-600/20"
-                            disabled={isSavingThresholds}
-                          >
-                            {isSavingThresholds ? (
-                              <span className="flex items-center gap-2">
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                                Salvando...
-                              </span>
-                            ) : (
-                              'Salvar Regras'
-                            )}
-                          </Button>
-                        </div>
-                      )}
-                    </form>
-                  </CardContent>
-                </Card>
-              )}
-
               {settingsSubTab === 'alerts' && (
                 <div className="space-y-6">
+                  {/* REGRAS DE CRITICIDADE */}
+                  <Card className="bg-zinc-950/60 border-zinc-900 text-white">
+                    <CardHeader>
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                        <CardTitle className="text-xl font-bold">Regras de Criticidade (Algoritmo Automático)</CardTitle>
+                        {!hasWriteAccess('alerts') && (
+                          <Badge className="bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[10px] px-2 py-0.5 rounded-md font-semibold select-none flex gap-1 items-center">
+                            <Eye className="h-3 w-3" /> Apenas Visualização
+                          </Badge>
+                        )}
+                      </div>
+                      <CardDescription className="text-zinc-550 mt-1">
+                        Defina quantos relatos em um curto período são necessários para disparar alertas visuais no site público.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <form onSubmit={handleSaveThresholds} className="space-y-6">
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                          {/* Window Minutes */}
+                          <div className="space-y-2">
+                            <Label htmlFor="windowMinutes" className="text-zinc-300 font-semibold text-sm">Janela de Tempo (Minutos)</Label>
+                            <Input
+                              id="windowMinutes"
+                              type="number"
+                              min={1}
+                              value={thresholdWindow}
+                              onChange={(e) => setThresholdWindow(Number(e.target.value))}
+                              className="bg-zinc-900 border-zinc-800 text-white focus:border-indigo-500"
+                              disabled={!hasWriteAccess('alerts')}
+                              required
+                            />
+                            <p className="text-xs text-zinc-500">Janela de criticidade de {thresholdWindow} min.</p>
+                          </div>
+
+                          {/* Warning Limit */}
+                          <div className="space-y-2">
+                            <Label htmlFor="warningLimit" className="text-amber-400 font-semibold text-sm">Alerta: Instabilidade (🟡)</Label>
+                            <Input
+                              id="warningLimit"
+                              type="number"
+                              min={1}
+                              value={thresholdWarning}
+                              onChange={(e) => setThresholdWarning(Number(e.target.value))}
+                              className="bg-zinc-900 border-zinc-800 text-amber-400 focus:border-amber-500"
+                              disabled={!hasWriteAccess('alerts')}
+                              required
+                            />
+                            <p className="text-xs text-zinc-500">Mínimo para card amarelo.</p>
+                          </div>
+
+                          {/* Critical Limit */}
+                          <div className="space-y-2">
+                            <Label htmlFor="criticalLimit" className="text-red-400 font-semibold text-sm">Crítico: Queda Total (🔴)</Label>
+                            <Input
+                              id="criticalLimit"
+                              type="number"
+                              min={2}
+                              value={thresholdCritical}
+                              onChange={(e) => setThresholdCritical(Number(e.target.value))}
+                              className="bg-zinc-900 border-zinc-800 text-red-450 focus:border-red-500"
+                              disabled={!hasWriteAccess('alerts')}
+                              required
+                            />
+                            <p className="text-xs text-zinc-500">Mínimo para card vermelho.</p>
+                          </div>
+
+                          {/* Public Chart Window Limit */}
+                          <div className="space-y-2">
+                            <Label htmlFor="chartWindowHours" className="text-indigo-400 font-semibold text-sm">Janela do Gráfico Público</Label>
+                            <Select 
+                              value={String(chartWindowHours)} 
+                              onValueChange={(val) => setChartWindowHours(Number(val || '24'))}
+                              disabled={!hasWriteAccess('alerts')}
+                            >
+                              <SelectTrigger id="chartWindowHours" className="bg-zinc-900 border-zinc-800 text-white focus:border-indigo-500">
+                                <SelectValue placeholder="Selecione" />
+                              </SelectTrigger>
+                              <SelectContent className="bg-zinc-900 border-zinc-800 text-white">
+                                <SelectItem value="4">Últimas 4 Horas</SelectItem>
+                                <SelectItem value="12">Últimas 12 Horas</SelectItem>
+                                <SelectItem value="24">Últimas 24 Horas</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <p className="text-xs text-zinc-500">Exibição na Home pública.</p>
+                          </div>
+                        </div>
+
+                        <div className="border-t border-zinc-900 pt-6 space-y-4">
+                          <h4 className="text-sm font-semibold text-zinc-350 flex items-center gap-1.5">
+                            <Sliders className="h-4 w-4 text-indigo-400" />
+                            Nomes dos Status nos Cards Públicos
+                          </h4>
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            {/* Status Normal Label */}
+                            <div className="space-y-2">
+                              <Label htmlFor="labelNormal" className="text-emerald-400 font-semibold text-sm">Status: Normal (🟢)</Label>
+                              <Input
+                                id="labelNormal"
+                                type="text"
+                                value={labelNormal}
+                                onChange={(e) => setLabelNormal(e.target.value)}
+                                className="bg-zinc-900 border-zinc-800 text-emerald-400 focus:border-emerald-550"
+                                placeholder="Ex: Operando"
+                                disabled={!hasWriteAccess('alerts')}
+                                required
+                              />
+                              <p className="text-xs text-zinc-500">Texto para funcionamento normal.</p>
+                            </div>
+
+                            {/* Status Warning Label */}
+                            <div className="space-y-2">
+                              <Label htmlFor="labelWarning" className="text-amber-400 font-semibold text-sm">Status: Instabilidade (🟡)</Label>
+                              <Input
+                                id="labelWarning"
+                                type="text"
+                                value={labelWarning}
+                                onChange={(e) => setLabelWarning(e.target.value)}
+                                className="bg-zinc-900 border-zinc-800 text-amber-400 focus:border-amber-500"
+                                placeholder="Ex: Instabilidade"
+                                disabled={!hasWriteAccess('alerts')}
+                                required
+                              />
+                              <p className="text-xs text-zinc-500">Texto para instabilidade.</p>
+                            </div>
+
+                            {/* Status Critical Label */}
+                            <div className="space-y-2">
+                              <Label htmlFor="labelCritical" className="text-red-400 font-semibold text-sm">Status: Queda Total (🔴)</Label>
+                              <Input
+                                id="labelCritical"
+                                type="text"
+                                value={labelCritical}
+                                onChange={(e) => setLabelCritical(e.target.value)}
+                                className="bg-zinc-900 border-zinc-800 text-red-450 focus:border-red-500"
+                                placeholder="Ex: Queda total"
+                                disabled={!hasWriteAccess('alerts')}
+                                required
+                              />
+                              <p className="text-xs text-zinc-500">Texto para falha total.</p>
+                            </div>
+                          </div>
+                        </div>
+
+                        {hasWriteAccess('alerts') && (
+                          <div className="flex justify-end pt-4 border-t border-zinc-900">
+                            <Button
+                              type="submit"
+                              className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-8 py-2.5 rounded-xl transition-all shadow-lg shadow-indigo-600/20"
+                              disabled={isSavingThresholds}
+                            >
+                              {isSavingThresholds ? (
+                                <span className="flex items-center gap-2">
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                  Salvando...
+                                </span>
+                              ) : (
+                                'Salvar Regras'
+                              )}
+                            </Button>
+                          </div>
+                        )}
+                      </form>
+                    </CardContent>
+                  </Card>
+
                   {/* CONFIG DISPLAY INTERVAL */}
                   <Card className="bg-zinc-950/60 border-zinc-900 text-white">
                     <CardHeader>
@@ -3059,7 +3045,6 @@ export default function AdminPage() {
                   {[
                     { key: 'cards', label: 'Gerenciamento de Cards' },
                     { key: 'form', label: 'Construtor de Formulários' },
-                    { key: 'rules', label: 'Regras de Criticidade' },
                     { key: 'alerts', label: 'Gerenciar Alertas' },
                     { key: 'logs', label: 'Logs de Auditoria' },
                   ].map(({ key, label }) => {
