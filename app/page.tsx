@@ -691,7 +691,10 @@ export default function HomePage() {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
               {sortedServices
-                .filter(s => s.name.toLowerCase().includes(searchQuery.toLowerCase()))
+                .filter(s => 
+                  s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                  (s.category && s.category.toLowerCase().includes(searchQuery.toLowerCase()))
+                )
                 .map((service) => {
                 const stats = serviceStats[service.id] || { count24h: 0, count30m: 0, status: 'normal' };
                 const currentStatus = stats.status;
