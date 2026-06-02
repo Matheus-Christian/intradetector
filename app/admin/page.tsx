@@ -52,7 +52,10 @@ import {
   Layers,
   FormInput,
   Activity,
-  Eye
+  Eye,
+  PanelLeftClose,
+  PanelLeft,
+  Menu
 } from 'lucide-react';
 import * as Icons from 'lucide-react';
 import Link from 'next/link';
@@ -91,6 +94,10 @@ export default function AdminPage() {
 
   // Active Tab
   const [activeTab, setActiveTab] = useState<'reports' | 'analytics' | 'settings'>('reports');
+
+  // Sidebar fold/unfold state
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isSidebarHovered, setIsSidebarHovered] = useState(false);
 
   // Hydration Guard
   const [isMounted, setIsMounted] = useState(false);
@@ -1138,6 +1145,25 @@ export default function AdminPage() {
     });
   }, [reports, filterService, dynamicFilters, filterTimeRange, customStartDate, customEndDate]);
 
+  const reportsInTimeRange = useMemo(() => {
+    return reports.filter((r) => {
+      const reportTime = new Date(r.created_at).getTime();
+      const now = Date.now();
+      if (filterTimeRange === '24h') {
+        return now - reportTime <= 24 * 60 * 60 * 1000;
+      } else if (filterTimeRange === '7d') {
+        return now - reportTime <= 7 * 24 * 60 * 60 * 1000;
+      } else if (filterTimeRange === '30d') {
+        return now - reportTime <= 30 * 24 * 60 * 60 * 1000;
+      } else if (filterTimeRange === 'custom') {
+        const startMs = customStartDate ? new Date(customStartDate).getTime() : 0;
+        const endMs = customEndDate ? new Date(customEndDate).getTime() : Infinity;
+        return reportTime >= startMs && reportTime <= endMs;
+      }
+      return true; // 'all'
+    });
+  }, [reports, filterTimeRange, customStartDate, customEndDate]);
+
   // Bar Chart Data (Reports per Service)
   const barChartData = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -1435,43 +1461,46 @@ export default function AdminPage() {
       </header>
 
       {/* TAB NAVIGATION */}
-      <div className="relative z-10 border-b border-zinc-900 bg-zinc-950/20 backdrop-blur-sm px-6 py-2 flex gap-2">
-        <Button
-          onClick={() => setActiveTab('reports')}
-          variant="ghost"
-          className={`rounded-xl text-sm font-semibold transition-all gap-1.5 ${
-            activeTab === 'reports'
-              ? 'bg-zinc-900 text-white border border-zinc-800'
-              : 'text-zinc-400 hover:text-white hover:bg-zinc-900/50'
-          }`}
-        >
-          <ListTodo className="h-4 w-4" />
-          Relatos ({reports.length})
-        </Button>
-        <Button
-          onClick={() => setActiveTab('analytics')}
-          variant="ghost"
-          className={`rounded-xl text-sm font-semibold transition-all gap-1.5 ${
-            activeTab === 'analytics'
-              ? 'bg-zinc-900 text-white border border-zinc-800'
-              : 'text-zinc-400 hover:text-white hover:bg-zinc-900/50'
-          }`}
-        >
-          <BarChart3 className="h-4 w-4" />
-          Gráficos & Análises
-        </Button>
-        <Button
-          onClick={() => setActiveTab('settings')}
-          variant="ghost"
-          className={`rounded-xl text-sm font-semibold transition-all gap-1.5 ${
-            activeTab === 'settings'
-              ? 'bg-zinc-900 text-white border border-zinc-800'
-              : 'text-zinc-400 hover:text-white hover:bg-zinc-900/50'
-          }`}
-        >
-          <Sliders className="h-4 w-4" />
-          Configurações
-        </Button>
+      <div className="relative z-10 border-b border-zinc-900 bg-zinc-950/20 backdrop-blur-sm px-6 py-2 flex items-center justify-between gap-4">
+        <div className="flex gap-2">
+          <Button
+            onClick={() => setActiveTab('reports')}
+            variant="ghost"
+            className={`rounded-xl text-sm font-semibold transition-all gap-1.5 ${
+              activeTab === 'reports'
+                ? 'bg-zinc-900 text-white border border-zinc-800'
+                : 'text-zinc-400 hover:text-white hover:bg-zinc-900/50'
+            }`}
+          >
+            <ListTodo className="h-4 w-4" />
+            Relatos ({reports.length})
+          </Button>
+          <Button
+            onClick={() => setActiveTab('analytics')}
+            variant="ghost"
+            className={`rounded-xl text-sm font-semibold transition-all gap-1.5 ${
+              activeTab === 'analytics'
+                ? 'bg-zinc-900 text-white border border-zinc-800'
+                : 'text-zinc-400 hover:text-white hover:bg-zinc-900/50'
+            }`}
+          >
+            <BarChart3 className="h-4 w-4" />
+            Gráficos & Análises
+          </Button>
+          <Button
+            onClick={() => setActiveTab('settings')}
+            variant="ghost"
+            className={`rounded-xl text-sm font-semibold transition-all gap-1.5 ${
+              activeTab === 'settings'
+                ? 'bg-zinc-900 text-white border border-zinc-800'
+                : 'text-zinc-400 hover:text-white hover:bg-zinc-900/50'
+            }`}
+          >
+            <Sliders className="h-4 w-4" />
+            Configurações
+          </Button>
+        </div>
+
       </div>
 
       {/* MAIN CONTENT AREA */}
@@ -1513,10 +1542,10 @@ export default function AdminPage() {
                           <TableRow key={report.id} className="hover:bg-zinc-900/30 border-zinc-900">
                             <TableCell className="text-zinc-300 text-xs whitespace-nowrap">{dateFormatted}</TableCell>
                             <TableCell className="font-bold text-white text-sm">
-                              <div className="flex flex-col sm:flex-row sm:items-center gap-1.5">
+                              <div className="flex flex-col items-start gap-1">
                                 <span>{svcName}</span>
                                 {report.custom_fields?.active_alert && (
-                                  <div className="flex flex-col sm:flex-row gap-1">
+                                  <div className="flex flex-wrap gap-1">
                                     {String(report.custom_fields.active_alert).split(' | ').map((tag, idx) => (
                                       <Badge key={idx} className="bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[9px] px-1.5 py-0 rounded-md w-fit font-medium whitespace-nowrap">
                                         {tag}
@@ -1567,43 +1596,129 @@ export default function AdminPage() {
 
         {/* TAB 2: ANALYTICAL CHARTS & FILTERS */}
         {activeTab === 'analytics' && (
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-start relative z-10 animate-in fade-in duration-300">
+          <div className="flex flex-col lg:flex-row gap-6 items-start relative z-10 animate-in fade-in duration-300 w-full">
             {/* SIDEBAR NAVIGATION MENU */}
-            <aside className="lg:col-span-1 flex flex-col gap-1.5 bg-zinc-950/60 p-4 rounded-2xl border border-zinc-900 lg:sticky lg:top-24">
-              <div className="px-2 py-1.5 mb-2">
-                <span className="text-[10px] uppercase font-bold tracking-widest text-zinc-500">Menu de Análise</span>
+            <aside className={`shrink-0 transition-all duration-300 sticky top-24 z-40 hidden lg:block ${isSidebarOpen ? 'w-64' : 'w-[76px]'}`}>
+              <div 
+                onMouseEnter={() => setIsSidebarHovered(true)}
+                onMouseLeave={() => setIsSidebarHovered(false)}
+                className={`flex flex-col gap-1.5 bg-zinc-950/70 p-3 rounded-2xl border border-zinc-900 transition-all duration-300 ease-in-out backdrop-blur-md
+                  ${(isSidebarOpen || isSidebarHovered) ? 'w-64 shadow-2xl border-zinc-800' : 'w-[76px]'}
+                `}
+              >
+                {/* Cabeçalho do Menu */}
+                <div className={`flex items-center mb-3 transition-all duration-300 ${(isSidebarOpen || isSidebarHovered) ? 'justify-between px-2' : 'justify-center'}`}>
+                  {(isSidebarOpen || isSidebarHovered) ? (
+                    <span className="text-[10px] uppercase font-bold tracking-widest text-zinc-500 animate-in fade-in duration-300 whitespace-nowrap overflow-hidden">
+                      Menu de Análise
+                    </span>
+                  ) : null}
+                  <Button
+                    onClick={() => setIsSidebarOpen(prev => !prev)}
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-900/50 shrink-0"
+                    title={isSidebarOpen ? "Recolher menu" : "Fixar menu"}
+                  >
+                    <Menu className="h-4.5 w-4.5" />
+                  </Button>
+                </div>
+
+                {/* Opções */}
+                <Button
+                  onClick={() => {
+                    setAnalyticsSubTab('alerts');
+                    setIsAlertsReportGenerated(false);
+                  }}
+                  variant="ghost"
+                  className={`w-full rounded-xl text-xs font-semibold py-5 transition-all duration-200 flex items-center ${
+                    (isSidebarOpen || isSidebarHovered) ? 'justify-start px-4 gap-3' : 'justify-center px-0 gap-0'
+                  } ${
+                    analyticsSubTab === 'alerts'
+                      ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/10'
+                      : 'text-zinc-400 hover:text-white hover:bg-zinc-900/50'
+                  }`}
+                  title="Análise por Alertas"
+                >
+                  <Activity className="h-4 w-4 shrink-0" />
+                  <span className={`transition-all duration-300 whitespace-nowrap overflow-hidden ${(isSidebarOpen || isSidebarHovered) ? 'w-auto opacity-100' : 'w-0 opacity-0 pointer-events-none'}`}>
+                    Análise por Alertas
+                  </span>
+                </Button>
+
+                <Button
+                  onClick={() => setAnalyticsSubTab('custom')}
+                  variant="ghost"
+                  className={`w-full rounded-xl text-xs font-semibold py-5 transition-all duration-200 flex items-center ${
+                    (isSidebarOpen || isSidebarHovered) ? 'justify-start px-4 gap-3' : 'justify-center px-0 gap-0'
+                  } ${
+                    analyticsSubTab === 'custom'
+                      ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/10'
+                      : 'text-zinc-400 hover:text-white hover:bg-zinc-900/50'
+                  }`}
+                  title="Análise personalizada"
+                >
+                  <Sliders className="h-4 w-4 shrink-0" />
+                  <span className={`transition-all duration-300 whitespace-nowrap overflow-hidden ${(isSidebarOpen || isSidebarHovered) ? 'w-auto opacity-100' : 'w-0 opacity-0 pointer-events-none'}`}>
+                    Análise personalizada
+                  </span>
+                </Button>
               </div>
-              <Button
-                onClick={() => {
-                  setAnalyticsSubTab('alerts');
-                  setIsAlertsReportGenerated(false);
-                }}
-                variant="ghost"
-                className={`w-full justify-start rounded-xl text-xs font-semibold gap-2 py-5 px-4 transition-all duration-200 ${
-                  analyticsSubTab === 'alerts'
-                    ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/10'
-                    : 'text-zinc-400 hover:text-white hover:bg-zinc-900/50'
-                }`}
-              >
-                <Activity className="h-4 w-4" />
-                Análise por Alertas
-              </Button>
-              <Button
-                onClick={() => setAnalyticsSubTab('custom')}
-                variant="ghost"
-                className={`w-full justify-start rounded-xl text-xs font-semibold gap-2 py-5 px-4 transition-all duration-200 ${
-                  analyticsSubTab === 'custom'
-                    ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/10'
-                    : 'text-zinc-400 hover:text-white hover:bg-zinc-900/50'
-                }`}
-              >
-                <Sliders className="h-4 w-4" />
-                Análise personalizada
-              </Button>
             </aside>
 
+            {/* Mobile Sidebar (stacks or collapses) */}
+            <div className="w-full lg:hidden block mb-4">
+              <div className="bg-zinc-950/70 p-3 rounded-2xl border border-zinc-900 flex flex-col gap-1.5 w-full">
+                <div className="flex items-center justify-between px-2 mb-2">
+                  <span className="text-[10px] uppercase font-bold tracking-widest text-zinc-500">
+                    Menu de Análise
+                  </span>
+                  <Button
+                    onClick={() => setIsSidebarOpen(prev => !prev)}
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-900/50 shrink-0"
+                    title={isSidebarOpen ? "Recolher menu" : "Expandir menu"}
+                  >
+                    <Menu className="h-4.5 w-4.5" />
+                  </Button>
+                </div>
+                {isSidebarOpen && (
+                  <div className="flex flex-col gap-1.5 animate-in slide-in-from-top-4 duration-200">
+                    <Button
+                      onClick={() => {
+                        setAnalyticsSubTab('alerts');
+                        setIsAlertsReportGenerated(false);
+                      }}
+                      variant="ghost"
+                      className={`w-full justify-start rounded-xl text-xs font-semibold gap-3 py-5 px-4 transition-all duration-200 flex items-center ${
+                        analyticsSubTab === 'alerts'
+                          ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/10'
+                          : 'text-zinc-400 hover:text-white hover:bg-zinc-900/50'
+                      }`}
+                    >
+                      <Activity className="h-4 w-4 shrink-0" />
+                      Análise por Alertas
+                    </Button>
+                    <Button
+                      onClick={() => setAnalyticsSubTab('custom')}
+                      variant="ghost"
+                      className={`w-full justify-start rounded-xl text-xs font-semibold gap-3 py-5 px-4 transition-all duration-200 flex items-center ${
+                        analyticsSubTab === 'custom'
+                          ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/10'
+                          : 'text-zinc-400 hover:text-white hover:bg-zinc-900/50'
+                      }`}
+                    >
+                      <Sliders className="h-4 w-4 shrink-0" />
+                      Análise personalizada
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </div>
+
             {/* CONTENT AREA */}
-            <div className="lg:col-span-3 space-y-6">
+            <div className="flex-1 min-w-0 w-full space-y-6">
               {analyticsSubTab === 'custom' ? (
                 <div className="space-y-6 animate-in fade-in-50 duration-300">
                   {/* INTERACTIVE FILTER BAR */}
@@ -1694,6 +1809,41 @@ export default function AdminPage() {
                       )}
                     </CardContent>
                   </Card>
+
+                  {/* GENERAL METRICS ROW */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 animate-in fade-in-50 duration-200">
+                    {/* Metric 1 */}
+                    <Card className="bg-zinc-950/60 border-zinc-900 p-5 flex flex-col justify-between">
+                      <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">Total de Relatos</span>
+                      <span className="text-3xl font-extrabold text-white mt-2">{reportsInTimeRange.length}</span>
+                      <span className="text-[10px] text-zinc-400 mt-1">no período selecionado</span>
+                    </Card>
+                    {/* Metric 2 */}
+                    <Card className="bg-zinc-950/60 border-zinc-900 p-5 flex flex-col justify-between">
+                      <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">Relatos Filtrados</span>
+                      <span className="text-3xl font-extrabold text-indigo-400 mt-2">{filteredReports.length}</span>
+                      <span className="text-[10px] text-zinc-400 mt-1">com filtros aplicados</span>
+                    </Card>
+                    {/* Metric 3 */}
+                    <Card className="bg-zinc-950/60 border-zinc-900 p-5 flex flex-col justify-between">
+                      <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">Serviços Afetados</span>
+                      <span className="text-3xl font-extrabold text-amber-500 mt-2">
+                        {new Set(filteredReports.map(r => r.service_id)).size}
+                      </span>
+                      <span className="text-[10px] text-zinc-400 mt-1">plataformas impactadas</span>
+                    </Card>
+                    {/* Metric 4 */}
+                    <Card className="bg-zinc-950/60 border-zinc-900 p-5 flex flex-col justify-between">
+                      <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">Eficácia de Reboot</span>
+                      <span className="text-3xl font-extrabold text-emerald-500 mt-2">
+                        {filteredReports.length > 0 
+                          ? `${Math.round((filteredReports.filter(r => r.is_resolved).length / filteredReports.length) * 100)}%`
+                          : '0%'
+                        }
+                      </span>
+                      <span className="text-[10px] text-zinc-400 mt-1">resolvidos pós reboot</span>
+                    </Card>
+                  </div>
 
                   {/* CHARTS CONTAINER */}
                   <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -1870,10 +2020,10 @@ export default function AdminPage() {
                                   <TableRow key={report.id} className="hover:bg-zinc-900/30 border-zinc-900">
                                     <TableCell className="text-zinc-300 text-xs whitespace-nowrap">{dateFormatted}</TableCell>
                                     <TableCell className="font-bold text-white text-sm">
-                                      <div className="flex flex-col sm:flex-row sm:items-center gap-1.5">
+                                      <div className="flex flex-col items-start gap-1">
                                         <span>{svcName}</span>
                                         {report.custom_fields?.active_alert && (
-                                          <div className="flex flex-col sm:flex-row gap-1">
+                                          <div className="flex flex-wrap gap-1">
                                             {String(report.custom_fields.active_alert).split(' | ').map((tag, idx) => (
                                               <Badge key={idx} className="bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[9px] px-1.5 py-0 rounded-md w-fit font-medium whitespace-nowrap">
                                                 {tag}
@@ -2294,7 +2444,7 @@ export default function AdminPage() {
                                       <TableRow key={report.id} className="hover:bg-zinc-900/30 border-zinc-900">
                                         <TableCell className="text-zinc-300 text-[11px] whitespace-nowrap">{dateFormatted}</TableCell>
                                         <TableCell className="font-bold text-white text-xs">
-                                          <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 flex-wrap">
+                                          <div className="flex flex-col items-start gap-1">
                                             <span>{svcName}</span>
                                             {matchingAlerts.length > 0 && (
                                               <div className="flex flex-wrap gap-1">
@@ -2343,87 +2493,233 @@ export default function AdminPage() {
 
         {/* TAB 3: SETTINGS (FORM OPTIONS + SERVICE CRUD) */}
         {activeTab === 'settings' && (
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-start relative z-10 animate-in fade-in duration-300">
+          <div className="flex flex-col lg:flex-row gap-6 items-start relative z-10 animate-in fade-in duration-300 w-full">
             {/* SIDEBAR NAVIGATION MENU */}
-            <aside className="lg:col-span-1 flex flex-col gap-1.5 bg-zinc-950/60 p-4 rounded-2xl border border-zinc-900 lg:sticky lg:top-24">
-              <div className="px-2 py-1.5 mb-2">
-                <span className="text-[10px] uppercase font-bold tracking-widest text-zinc-500">Configurações</span>
-              </div>
-              {hasReadAccess('cards') && (
-                <Button
-                  onClick={() => setSettingsSubTab('cards')}
-                  variant="ghost"
-                  className={`w-full justify-start rounded-xl text-xs font-semibold gap-2 py-5 px-4 transition-all duration-200 ${
-                    settingsSubTab === 'cards'
-                      ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/10'
-                      : 'text-zinc-400 hover:text-white hover:bg-zinc-900/50'
-                  }`}
-                >
-                  <Layers className="h-4 w-4" />
-                  Gerenciamento de Cards
-                </Button>
-              )}
-              {hasReadAccess('form') && (
-                <Button
-                  onClick={() => setSettingsSubTab('form')}
-                  variant="ghost"
-                  className={`w-full justify-start rounded-xl text-xs font-semibold gap-2 py-5 px-4 transition-all duration-200 ${
-                    settingsSubTab === 'form'
-                      ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/10'
-                      : 'text-zinc-400 hover:text-white hover:bg-zinc-900/50'
-                  }`}
-                >
-                  <FormInput className="h-4 w-4" />
-                  Construtor de Formulários
-                </Button>
-              )}
+            <aside className={`shrink-0 transition-all duration-300 sticky top-24 z-40 hidden lg:block ${isSidebarOpen ? 'w-64' : 'w-[76px]'}`}>
+              <div 
+                onMouseEnter={() => setIsSidebarHovered(true)}
+                onMouseLeave={() => setIsSidebarHovered(false)}
+                className={`flex flex-col gap-1.5 bg-zinc-950/70 p-3 rounded-2xl border border-zinc-900 transition-all duration-300 ease-in-out backdrop-blur-md
+                  ${(isSidebarOpen || isSidebarHovered) ? 'w-64 shadow-2xl border-zinc-800' : 'w-[76px]'}
+                `}
+              >
+                {/* Cabeçalho do Menu */}
+                <div className={`flex items-center mb-3 transition-all duration-300 ${(isSidebarOpen || isSidebarHovered) ? 'justify-between px-2' : 'justify-center'}`}>
+                  {(isSidebarOpen || isSidebarHovered) ? (
+                    <span className="text-[10px] uppercase font-bold tracking-widest text-zinc-500 animate-in fade-in duration-300 whitespace-nowrap overflow-hidden">
+                      Configurações
+                    </span>
+                  ) : null}
+                  <Button
+                    onClick={() => setIsSidebarOpen(prev => !prev)}
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-900/50 shrink-0"
+                    title={isSidebarOpen ? "Recolher menu" : "Fixar menu"}
+                  >
+                    <Menu className="h-4.5 w-4.5" />
+                  </Button>
+                </div>
 
-              {hasReadAccess('alerts') && (
-                <Button
-                  onClick={() => setSettingsSubTab('alerts')}
-                  variant="ghost"
-                  className={`w-full justify-start rounded-xl text-xs font-semibold gap-2 py-5 px-4 transition-all duration-200 ${
-                    settingsSubTab === 'alerts'
-                      ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/10'
-                      : 'text-zinc-400 hover:text-white hover:bg-zinc-900/50'
-                  }`}
-                >
-                  <AlertCircle className="h-4 w-4" />
-                  Gerenciar Alertas
-                </Button>
-              )}
-              {hasReadAccess('logs') && (
-                <Button
-                  onClick={() => setSettingsSubTab('logs')}
-                  variant="ghost"
-                  className={`w-full justify-start rounded-xl text-xs font-semibold gap-2 py-5 px-4 transition-all duration-200 ${
-                    settingsSubTab === 'logs'
-                      ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/10'
-                      : 'text-zinc-400 hover:text-white hover:bg-zinc-900/50'
-                  }`}
-                >
-                  <Activity className="h-4 w-4" />
-                  Logs de Auditoria
-                </Button>
-              )}
-              {currentUserProfile?.role === 'superadmin' && (
-                <Button
-                  onClick={() => setSettingsSubTab('users')}
-                  variant="ghost"
-                  className={`w-full justify-start rounded-xl text-xs font-semibold gap-2 py-5 px-4 transition-all duration-200 ${
-                    settingsSubTab === 'users'
-                      ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/10'
-                      : 'text-zinc-400 hover:text-white hover:bg-zinc-900/50'
-                  }`}
-                >
-                  <Shield className="h-4 w-4" />
-                  Gerenciamento de Usuários
-                </Button>
-              )}
+                {/* Opções */}
+                {hasReadAccess('cards') && (
+                  <Button
+                    onClick={() => setSettingsSubTab('cards')}
+                    variant="ghost"
+                    className={`w-full rounded-xl text-xs font-semibold py-5 transition-all duration-200 flex items-center ${
+                      (isSidebarOpen || isSidebarHovered) ? 'justify-start px-4 gap-3' : 'justify-center px-0 gap-0'
+                    } ${
+                      settingsSubTab === 'cards'
+                        ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/10'
+                        : 'text-zinc-400 hover:text-white hover:bg-zinc-900/50'
+                    }`}
+                    title="Gerenciamento de Cards"
+                  >
+                    <Layers className="h-4 w-4 shrink-0" />
+                    <span className={`transition-all duration-300 whitespace-nowrap overflow-hidden ${(isSidebarOpen || isSidebarHovered) ? 'w-auto opacity-100' : 'w-0 opacity-0 pointer-events-none'}`}>
+                      Gerenciamento de Cards
+                    </span>
+                  </Button>
+                )}
+
+                {hasReadAccess('form') && (
+                  <Button
+                    onClick={() => setSettingsSubTab('form')}
+                    variant="ghost"
+                    className={`w-full rounded-xl text-xs font-semibold py-5 transition-all duration-200 flex items-center ${
+                      (isSidebarOpen || isSidebarHovered) ? 'justify-start px-4 gap-3' : 'justify-center px-0 gap-0'
+                    } ${
+                      settingsSubTab === 'form'
+                        ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/10'
+                        : 'text-zinc-400 hover:text-white hover:bg-zinc-900/50'
+                    }`}
+                    title="Construtor de Formulários"
+                  >
+                    <FormInput className="h-4 w-4 shrink-0" />
+                    <span className={`transition-all duration-300 whitespace-nowrap overflow-hidden ${(isSidebarOpen || isSidebarHovered) ? 'w-auto opacity-100' : 'w-0 opacity-0 pointer-events-none'}`}>
+                      Construtor de Formulários
+                    </span>
+                  </Button>
+                )}
+
+                {hasReadAccess('alerts') && (
+                  <Button
+                    onClick={() => setSettingsSubTab('alerts')}
+                    variant="ghost"
+                    className={`w-full rounded-xl text-xs font-semibold py-5 transition-all duration-200 flex items-center ${
+                      (isSidebarOpen || isSidebarHovered) ? 'justify-start px-4 gap-3' : 'justify-center px-0 gap-0'
+                    } ${
+                      settingsSubTab === 'alerts'
+                        ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/10'
+                        : 'text-zinc-400 hover:text-white hover:bg-zinc-900/50'
+                    }`}
+                    title="Gerenciar Alertas"
+                  >
+                    <AlertCircle className="h-4 w-4 shrink-0" />
+                    <span className={`transition-all duration-300 whitespace-nowrap overflow-hidden ${(isSidebarOpen || isSidebarHovered) ? 'w-auto opacity-100' : 'w-0 opacity-0 pointer-events-none'}`}>
+                      Gerenciar Alertas
+                    </span>
+                  </Button>
+                )}
+
+                {hasReadAccess('logs') && (
+                  <Button
+                    onClick={() => setSettingsSubTab('logs')}
+                    variant="ghost"
+                    className={`w-full rounded-xl text-xs font-semibold py-5 transition-all duration-200 flex items-center ${
+                      (isSidebarOpen || isSidebarHovered) ? 'justify-start px-4 gap-3' : 'justify-center px-0 gap-0'
+                    } ${
+                      settingsSubTab === 'logs'
+                        ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/10'
+                        : 'text-zinc-400 hover:text-white hover:bg-zinc-900/50'
+                    }`}
+                    title="Logs de Auditoria"
+                  >
+                    <Activity className="h-4 w-4 shrink-0" />
+                    <span className={`transition-all duration-300 whitespace-nowrap overflow-hidden ${(isSidebarOpen || isSidebarHovered) ? 'w-auto opacity-100' : 'w-0 opacity-0 pointer-events-none'}`}>
+                      Logs de Auditoria
+                    </span>
+                  </Button>
+                )}
+
+                {currentUserProfile?.role === 'superadmin' && (
+                  <Button
+                    onClick={() => setSettingsSubTab('users')}
+                    variant="ghost"
+                    className={`w-full rounded-xl text-xs font-semibold py-5 transition-all duration-200 flex items-center ${
+                      (isSidebarOpen || isSidebarHovered) ? 'justify-start px-4 gap-3' : 'justify-center px-0 gap-0'
+                    } ${
+                      settingsSubTab === 'users'
+                        ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/10'
+                        : 'text-zinc-400 hover:text-white hover:bg-zinc-900/50'
+                    }`}
+                    title="Gerenciamento de Usuários"
+                  >
+                    <Shield className="h-4 w-4 shrink-0" />
+                    <span className={`transition-all duration-300 whitespace-nowrap overflow-hidden ${(isSidebarOpen || isSidebarHovered) ? 'w-auto opacity-100' : 'w-0 opacity-0 pointer-events-none'}`}>
+                      Gerenciamento de Usuários
+                    </span>
+                  </Button>
+                )}
+              </div>
             </aside>
 
+            {/* Mobile Sidebar (stacks or collapses) */}
+            <div className="w-full lg:hidden block mb-4">
+              <div className="bg-zinc-950/70 p-3 rounded-2xl border border-zinc-900 flex flex-col gap-1.5 w-full">
+                <div className="flex items-center justify-between px-2 mb-2">
+                  <span className="text-[10px] uppercase font-bold tracking-widest text-zinc-500">
+                    Configurações
+                  </span>
+                  <Button
+                    onClick={() => setIsSidebarOpen(prev => !prev)}
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-900/50 shrink-0"
+                    title={isSidebarOpen ? "Recolher menu" : "Expandir menu"}
+                  >
+                    <Menu className="h-4.5 w-4.5" />
+                  </Button>
+                </div>
+                {isSidebarOpen && (
+                  <div className="flex flex-col gap-1.5 animate-in slide-in-from-top-4 duration-200">
+                    {hasReadAccess('cards') && (
+                      <Button
+                        onClick={() => setSettingsSubTab('cards')}
+                        variant="ghost"
+                        className={`w-full justify-start rounded-xl text-xs font-semibold gap-3 py-5 px-4 transition-all duration-200 flex items-center ${
+                          settingsSubTab === 'cards'
+                            ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/10'
+                            : 'text-zinc-400 hover:text-white hover:bg-zinc-900/50'
+                        }`}
+                      >
+                        <Layers className="h-4 w-4 shrink-0" />
+                        Gerenciamento de Cards
+                      </Button>
+                    )}
+                    {hasReadAccess('form') && (
+                      <Button
+                        onClick={() => setSettingsSubTab('form')}
+                        variant="ghost"
+                        className={`w-full justify-start rounded-xl text-xs font-semibold gap-3 py-5 px-4 transition-all duration-200 flex items-center ${
+                          settingsSubTab === 'form'
+                            ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/10'
+                            : 'text-zinc-400 hover:text-white hover:bg-zinc-900/50'
+                        }`}
+                      >
+                        <FormInput className="h-4 w-4 shrink-0" />
+                        Construtor de Formulários
+                      </Button>
+                    )}
+                    {hasReadAccess('alerts') && (
+                      <Button
+                        onClick={() => setSettingsSubTab('alerts')}
+                        variant="ghost"
+                        className={`w-full justify-start rounded-xl text-xs font-semibold gap-3 py-5 px-4 transition-all duration-200 flex items-center ${
+                          settingsSubTab === 'alerts'
+                            ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/10'
+                            : 'text-zinc-400 hover:text-white hover:bg-zinc-900/50'
+                        }`}
+                      >
+                        <AlertCircle className="h-4 w-4 shrink-0" />
+                        Gerenciar Alertas
+                      </Button>
+                    )}
+                    {hasReadAccess('logs') && (
+                      <Button
+                        onClick={() => setSettingsSubTab('logs')}
+                        variant="ghost"
+                        className={`w-full justify-start rounded-xl text-xs font-semibold gap-3 py-5 px-4 transition-all duration-200 flex items-center ${
+                          settingsSubTab === 'logs'
+                            ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/10'
+                            : 'text-zinc-400 hover:text-white hover:bg-zinc-900/50'
+                        }`}
+                      >
+                        <Activity className="h-4 w-4 shrink-0" />
+                        Logs de Auditoria
+                      </Button>
+                    )}
+                    {currentUserProfile?.role === 'superadmin' && (
+                      <Button
+                        onClick={() => setSettingsSubTab('users')}
+                        variant="ghost"
+                        className={`w-full justify-start rounded-xl text-xs font-semibold gap-3 py-5 px-4 transition-all duration-200 flex items-center ${
+                          settingsSubTab === 'users'
+                            ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/10'
+                            : 'text-zinc-400 hover:text-white hover:bg-zinc-900/50'
+                        }`}
+                      >
+                        <Shield className="h-4 w-4 shrink-0" />
+                        Gerenciamento de Usuários
+                      </Button>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+
             {/* CONTENT AREA */}
-            <div className="lg:col-span-3 w-full min-w-0">
+            <div className="flex-1 min-w-0 w-full space-y-6">
               {settingsSubTab === 'cards' && (
                 <Card className="bg-zinc-950/60 border-zinc-900 text-white">
                   <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-900 pb-5">
