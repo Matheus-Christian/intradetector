@@ -124,8 +124,19 @@ export default function AdminPage() {
   const [serviceFormIcon, setServiceFormIcon] = useState('Globe');
   const [serviceFormCustomIcon, setServiceFormCustomIcon] = useState('');
   const [serviceFormStatus, setServiceFormStatus] = useState<'normal' | 'warning' | 'critical'>('normal');
+  const [serviceFormPingEnabled, setServiceFormPingEnabled] = useState(false);
+  const [serviceFormPingAddress, setServiceFormPingAddress] = useState('');
+  const [serviceFormPingInterval, setServiceFormPingInterval] = useState(30);
   const [isSavingService, setIsSavingService] = useState(false);
   const [searchServicesQuery, setSearchServicesQuery] = useState('');
+
+  // --- PING CONFIG STATE ---
+  const [isPingConfigModalOpen, setIsPingConfigModalOpen] = useState(false);
+  const [pingConfigLabel, setPingConfigLabel] = useState('Ping Real (Latência)');
+  const [pingConfigGreen, setPingConfigGreen] = useState(120);
+  const [pingConfigYellow, setPingConfigYellow] = useState(250);
+  const [pingConfigSetting, setPingConfigSetting] = useState<Setting | null>(null);
+  const [isSavingPingConfig, setIsSavingPingConfig] = useState(false);
 
   const filteredServices = useMemo(() => {
     if (!searchServicesQuery.trim()) return services;
@@ -399,6 +410,23 @@ export default function AdminPage() {
       }
       setCategoriesList(loadedCategories);
 
+      // Fetch global ping config
+      const { data: pingSettingData, error: pingSettingError } = await supabase
+        .from('settings')
+        .select('*')
+        .eq('key', 'ping_config')
+        .single();
+
+      if (pingSettingError && pingSettingError.code !== 'PGRST116') throw pingSettingError;
+
+      if (pingSettingData) {
+        setPingConfigSetting(pingSettingData);
+        const config = pingSettingData.value;
+        setPingConfigLabel(config.label || 'Ping Real (Latência)');
+        setPingConfigGreen(config.threshold_green || 120);
+        setPingConfigYellow(config.threshold_yellow || 250);
+      }
+
       // 5. Fetch Action Logs
       const { data: logsData, error: logsError } = await supabase
         .from('action_logs')
@@ -525,6 +553,9 @@ export default function AdminPage() {
     const firstCategory = categoriesList.length > 0 ? categoriesList[0].name : 'Redes Sociais';
     setServiceFormCategory(firstCategory);
     setServiceFormStatus('normal');
+    setServiceFormPingEnabled(false);
+    setServiceFormPingAddress('');
+    setServiceFormPingInterval(30);
     setIsServiceModalOpen(true);
   };
 
@@ -533,6 +564,9 @@ export default function AdminPage() {
     setServiceFormName(service.name);
     setServiceFormCategory(service.category);
     setServiceFormStatus(service.status);
+    setServiceFormPingEnabled(service.ping_enabled ?? false);
+    setServiceFormPingAddress(service.ping_address ?? '');
+    setServiceFormPingInterval(service.ping_interval ?? 30);
     setIsServiceModalOpen(true);
   };
 
@@ -700,7 +734,10 @@ export default function AdminPage() {
       name: serviceFormName.trim(),
       category: serviceFormCategory,
       icon_name: finalIcon,
-      status: editingService ? editingService.status : 'normal'
+      status: editingService ? editingService.status : 'normal',
+      ping_enabled: serviceFormPingEnabled,
+      ping_address: serviceFormPingAddress.trim(),
+      ping_interval: serviceFormPingInterval
     };
 
     try {
@@ -817,6 +854,42 @@ export default function AdminPage() {
       toast.error(`Erro ao salvar: ${err.message}`);
     } finally {
       setIsSavingThresholds(false);
+    }
+  };
+
+  // --- SAVE PING CONFIG HANDLER ---
+  const handleSavePingConfig = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSavingPingConfig(true);
+
+    if (pingConfigYellow <= pingConfigGreen) {
+      toast.error('O limite amarelo (moderado) deve ser maior que o limite verde (bom).');
+      setIsSavingPingConfig(false);
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('settings')
+        .upsert({
+          key: 'ping_config',
+          value: {
+            label: pingConfigLabel.trim(),
+            threshold_green: pingConfigGreen,
+            threshold_yellow: pingConfigYellow
+          },
+          updated_at: new Date().toISOString()
+        });
+
+      if (error) throw error;
+      await logAction('Configurar Ping Global', `Legenda: ${pingConfigLabel}, Verde: ${pingConfigGreen}ms, Amarelo: ${pingConfigYellow}ms`);
+      toast.success('Configurações globais de ping atualizadas e sincronizadas!');
+      setIsPingConfigModalOpen(false);
+      loadData();
+    } catch (err: any) {
+      toast.error(`Erro ao salvar configurações de ping: ${err.message}`);
+    } finally {
+      setIsSavingPingConfig(false);
     }
   };
 
@@ -2781,6 +2854,14 @@ export default function AdminPage() {
                           Gerenciar Categorias
                         </Button>
                         <Button
+                          onClick={() => setIsPingConfigModalOpen(true)}
+                          variant="outline"
+                          className="border-zinc-800 hover:bg-zinc-900 text-zinc-300 hover:text-white font-semibold gap-1.5 rounded-xl text-xs py-2 px-4 transition-all"
+                        >
+                          <Activity className="h-4 w-4 text-emerald-450" />
+                          Configurar Ping
+                        </Button>
+                        <Button
                           onClick={handleOpenAddService}
                           className="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold gap-1.5 rounded-xl text-xs py-2 px-4 shadow-lg shadow-indigo-600/10 transition-all"
                         >
@@ -2840,7 +2921,16 @@ export default function AdminPage() {
                                 {filteredServices.map((service) => {
                                   return (
                                     <TableRow key={service.id} className="hover:bg-zinc-900/30 border-zinc-900">
-                                      <TableCell className="font-bold text-white text-sm">{service.name}</TableCell>
+                                      <TableCell className="font-bold text-white text-sm">
+                                        <div className="flex flex-col items-start gap-1">
+                                          <span>{service.name}</span>
+                                          {service.ping_enabled && (
+                                            <Badge className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[9px] px-1.5 py-0 rounded-md font-medium whitespace-nowrap">
+                                              Ping Ativo: {service.ping_address} ({service.ping_interval}s)
+                                            </Badge>
+                                          )}
+                                        </div>
+                                      </TableCell>
                                       <TableCell className="text-zinc-300 text-xs">{service.category}</TableCell>
                                       <TableCell className="text-zinc-400 text-xs font-mono">{service.icon_name || 'Globe'}</TableCell>
                                       {hasWriteAccess('cards') && (
@@ -3773,6 +3863,63 @@ export default function AdminPage() {
               </Select>
             </div>
 
+            {/* Seção Ping Real */}
+            <div className="p-3.5 bg-zinc-900/40 border border-zinc-900 rounded-xl space-y-3.5 mt-2">
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label htmlFor="servicePingEnabled" className="text-xs font-semibold text-zinc-200 cursor-pointer select-none">
+                    Habilitar Medidor de Ping
+                  </Label>
+                  <p className="text-[10px] text-zinc-500">
+                    Mede a latência em tempo real direto no cliente.
+                  </p>
+                </div>
+                <input
+                  id="servicePingEnabled"
+                  type="checkbox"
+                  checked={serviceFormPingEnabled}
+                  onChange={(e) => setServiceFormPingEnabled(e.target.checked)}
+                  className="rounded border-zinc-800 bg-zinc-900 text-indigo-600 focus:ring-indigo-500 h-4.5 w-4.5 cursor-pointer"
+                />
+              </div>
+
+              {serviceFormPingEnabled && (
+                <div className="space-y-3 pt-2 border-t border-zinc-850/60 animate-in fade-in duration-200">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="servicePingAddress" className="text-zinc-300 text-[11px] font-semibold">Endereço IP ou URL *</Label>
+                    <Input
+                      id="servicePingAddress"
+                      value={serviceFormPingAddress}
+                      onChange={(e) => setServiceFormPingAddress(e.target.value)}
+                      placeholder="Ex: 8.8.8.8 ou google.com"
+                      className="bg-zinc-900 border-zinc-800 text-white placeholder-zinc-650 text-xs h-9 focus:border-indigo-500"
+                      required={serviceFormPingEnabled}
+                    />
+                    <p className="text-[9px] text-zinc-500 leading-normal">
+                      Será disparado um HTTP/Fetch HEAD sem CORS para este endereço. Certifique-se de que responde a requisições HTTPS públicas.
+                    </p>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label htmlFor="servicePingInterval" className="text-zinc-300 text-[11px] font-semibold">Intervalo de Checagem (Segundos) *</Label>
+                    <Input
+                      id="servicePingInterval"
+                      type="number"
+                      min={5}
+                      max={3600}
+                      value={serviceFormPingInterval}
+                      onChange={(e) => setServiceFormPingInterval(Number(e.target.value))}
+                      className="bg-zinc-900 border-zinc-800 text-white text-xs h-9 focus:border-indigo-500"
+                      required={serviceFormPingEnabled}
+                    />
+                    <p className="text-[9px] text-zinc-500 leading-normal">
+                      Tempo em segundos entre cada checagem (mínimo de 5s).
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+
             {/* Modal Buttons */}
             <div className="flex justify-end gap-3 pt-4 border-t border-zinc-800">
               <Button
@@ -4230,6 +4377,98 @@ export default function AdminPage() {
               Fechar
             </Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* PING GLOBAL CONFIG MODAL */}
+      <Dialog open={isPingConfigModalOpen} onOpenChange={(open) => !open && setIsPingConfigModalOpen(false)}>
+        <DialogContent className="max-w-md w-full bg-zinc-950 border border-zinc-800 text-white rounded-2xl p-6 max-h-[90vh] overflow-y-auto custom-scrollbar">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold flex items-center gap-2">
+              <Icons.Activity className="h-5 w-5 text-emerald-400" />
+              <span>Configurações Globais de Ping</span>
+            </DialogTitle>
+            <DialogDescription className="text-zinc-400 text-xs">
+              Defina os parâmetros de exibição e os limiares de latência aplicados globalmente a todos os cards de serviço ativos.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleSavePingConfig} className="space-y-4 mt-4">
+            {/* Field: Label */}
+            <div className="space-y-1.5">
+              <Label htmlFor="pingConfigLabel" className="text-zinc-300 text-xs font-semibold">Legenda de Exibição (Card) *</Label>
+              <Input
+                id="pingConfigLabel"
+                value={pingConfigLabel}
+                onChange={(e) => setPingConfigLabel(e.target.value)}
+                placeholder="Ex: Ping Real (Latência)"
+                className="bg-zinc-900 border-zinc-800 text-white placeholder-zinc-550"
+                disabled={!hasWriteAccess('cards')}
+                required
+              />
+              <p className="text-[9px] text-zinc-500">O texto que aparece ao lado do medidor no rodapé dos cards públicos.</p>
+            </div>
+
+            {/* Field: Green Limit */}
+            <div className="space-y-1.5">
+              <Label htmlFor="pingConfigGreen" className="text-emerald-400 text-xs font-semibold">Limiar Verde (Conexão Boa) *</Label>
+              <Input
+                id="pingConfigGreen"
+                type="number"
+                min={1}
+                value={pingConfigGreen}
+                onChange={(e) => setPingConfigGreen(Number(e.target.value))}
+                className="bg-zinc-900 border-zinc-800 text-emerald-450 focus:border-emerald-550"
+                disabled={!hasWriteAccess('cards')}
+                required
+              />
+              <p className="text-[9px] text-zinc-500">Latência menor ou igual a esse valor (em ms) será mostrada em verde (saudável).</p>
+            </div>
+
+            {/* Field: Yellow Limit */}
+            <div className="space-y-1.5">
+              <Label htmlFor="pingConfigYellow" className="text-amber-400 text-xs font-semibold">Limiar Amarelo (Conexão Moderada) *</Label>
+              <Input
+                id="pingConfigYellow"
+                type="number"
+                min={1}
+                value={pingConfigYellow}
+                onChange={(e) => setPingConfigYellow(Number(e.target.value))}
+                className="bg-zinc-900 border-zinc-800 text-amber-450 focus:border-amber-500"
+                disabled={!hasWriteAccess('cards')}
+                required
+              />
+              <p className="text-[9px] text-zinc-500">Latência entre o limiar verde e este valor será amarela. Acima disso será vermelha.</p>
+            </div>
+
+            {/* Modal Buttons */}
+            <div className="flex justify-end gap-3 pt-4 border-t border-zinc-800 mt-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsPingConfigModalOpen(false)}
+                className="border-zinc-800 hover:bg-zinc-900 text-zinc-400 hover:text-white"
+              >
+                Cancelar
+              </Button>
+              {hasWriteAccess('cards') && (
+                <Button
+                  type="submit"
+                  className="bg-indigo-600 hover:bg-indigo-500 text-white font-medium px-6 transition-all"
+                  disabled={isSavingPingConfig}
+                >
+                  {isSavingPingConfig ? (
+                    <span className="flex items-center gap-1.5">
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      Salvando...
+                    </span>
+                  ) : (
+                    'Salvar Configurações'
+                  )}
+                </Button>
+              )}
+            </div>
+          </form>
         </DialogContent>
       </Dialog>
     </div>

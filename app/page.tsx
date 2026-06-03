@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { getSupabaseClient } from '@/lib/supabase';
-import { Service, Report, Setting, FormSchema, ServiceStatus } from '@/lib/types';
+import { Service, Report, Setting, FormSchema, ServiceStatus, PingConfig } from '@/lib/types';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -39,6 +39,139 @@ function getServiceIcon(iconName: string, category: string) {
     default:
       return <Icons.Globe className="h-6 w-6 transition-transform group-hover:scale-110" />;
   }
+}
+
+interface ServicePingProps {
+  service: Service;
+  config: PingConfig;
+}
+
+function ServicePing({ service, config }: ServicePingProps) {
+  const [latency, setLatency] = useState<number | null>(null);
+  const [status, setStatus] = useState<'loading' | 'success' | 'timeout' | 'error'>('loading');
+
+  useEffect(() => {
+    if (!service.ping_enabled || !service.ping_address) return;
+
+    const performPing = async () => {
+      const address = service.ping_address;
+      if (!address) return;
+
+      setStatus('loading');
+      const start = performance.now();
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => {
+        controller.abort();
+      }, 4000);
+
+      try {
+        let pingUrl = address;
+        if (!/^https?:\/\//i.test(pingUrl)) {
+          pingUrl = `https://${pingUrl}`;
+        }
+        if (pingUrl.includes('?')) {
+          pingUrl = `${pingUrl}&_t=${Date.now()}`;
+        } else {
+          pingUrl = `${pingUrl}?_t=${Date.now()}`;
+        }
+
+        await fetch(pingUrl, {
+          mode: 'no-cors',
+          cache: 'no-store',
+          method: 'HEAD',
+          signal: controller.signal,
+          credentials: 'omit'
+        });
+
+        clearTimeout(timeoutId);
+        const end = performance.now();
+        const duration = Math.round(end - start);
+        setLatency(duration);
+        setStatus('success');
+      } catch (err: any) {
+        clearTimeout(timeoutId);
+        if (err.name === 'AbortError') {
+          setStatus('timeout');
+          setLatency(null);
+        } else {
+          const end = performance.now();
+          const duration = Math.round(end - start);
+          if (duration < 4000) {
+            setLatency(duration);
+            setStatus('success');
+          } else {
+            setStatus('error');
+            setLatency(null);
+          }
+        }
+      }
+    };
+
+    performPing();
+
+    const intervalSeconds = service.ping_interval || 30;
+    const intervalId = setInterval(performPing, intervalSeconds * 1000);
+
+    return () => clearInterval(intervalId);
+  }, [service.ping_enabled, service.ping_address, service.ping_interval]);
+
+  if (!service.ping_enabled) return null;
+
+  return (
+    <div 
+      className="border-t border-zinc-900 bg-zinc-950/40 px-5 py-2.5 flex items-center justify-between text-[11px] text-zinc-400 rounded-b-2xl"
+      onClick={(e) => e.stopPropagation()}
+    >
+      <div className="flex items-center gap-1.5 font-medium text-zinc-400">
+        <Icons.Activity className="h-3.5 w-3.5 text-zinc-650 shrink-0" />
+        <span>{config.label || 'Ping Real (Latência)'}</span>
+      </div>
+
+      <div className="flex items-center">
+        {status === 'loading' && (
+          <span className="flex items-center gap-1 text-[10px] text-zinc-550">
+            <Icons.Loader2 className="h-3 w-3 animate-spin text-zinc-500 shrink-0" />
+            Medindo...
+          </span>
+        )}
+
+        {status === 'timeout' && (
+          <Badge className="bg-red-500/10 text-red-400 border border-red-500/20 text-[9px] font-semibold px-1.5 py-0 rounded-md flex items-center gap-1">
+            <Icons.XCircle className="h-3 w-3 shrink-0" />
+            Esgotado (Offline)
+          </Badge>
+        )}
+
+        {status === 'error' && (
+          <Badge className="bg-red-500/10 text-red-400 border border-red-500/20 text-[9px] font-semibold px-1.5 py-0 rounded-md flex items-center gap-1">
+            <Icons.AlertOctagon className="h-3 w-3 shrink-0" />
+            Falha
+          </Badge>
+        )}
+
+        {status === 'success' && latency !== null && (
+          <>
+            {latency < config.threshold_green ? (
+              <Badge className="bg-emerald-500/10 text-emerald-405 border border-emerald-500/20 text-[9px] font-bold px-1.5 py-0 rounded-md flex items-center gap-1">
+                <span className="h-1 w-1 rounded-full bg-emerald-500" />
+                {latency} ms
+              </Badge>
+            ) : latency < config.threshold_yellow ? (
+              <Badge className="bg-amber-500/10 text-amber-450 border border-amber-500/20 text-[9px] font-bold px-1.5 py-0 rounded-md flex items-center gap-1">
+                <span className="h-1 w-1 rounded-full bg-amber-500 animate-pulse" />
+                {latency} ms
+              </Badge>
+            ) : (
+              <Badge className="bg-red-500/10 text-red-400 border border-red-500/20 text-[9px] font-bold px-1.5 py-0 rounded-md flex items-center gap-1">
+                <span className="h-1 w-1 rounded-full bg-red-550 animate-pulse" />
+                {latency} ms
+              </Badge>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
 }
 
 export default function HomePage() {
@@ -78,6 +211,11 @@ export default function HomePage() {
   const [onlineCount, setOnlineCount] = useState<number>(1);
   const [alertConfig, setAlertConfig] = useState<any>(null);
   const [showRelatedServices, setShowRelatedServices] = useState<boolean>(true);
+  const [pingConfig, setPingConfig] = useState<PingConfig>({
+    label: 'Ping Real (Latência)',
+    threshold_green: 120,
+    threshold_yellow: 250
+  });
 
   const resetTimestamp = useMemo(() => {
     let maxTime = 0;
@@ -330,6 +468,15 @@ export default function HomePage() {
           setDisplayInterval(alertConfigSetting.value?.displayInterval ?? 10);
           setAutoCloseInterval(alertConfigSetting.value?.autoCloseInterval ?? 60);
         }
+
+        const pingConfigSetting = settingsData.find(s => s.key === 'ping_config');
+        if (pingConfigSetting) {
+          setPingConfig({
+            label: pingConfigSetting.value.label || 'Ping Real (Latência)',
+            threshold_green: pingConfigSetting.value.threshold_green || 120,
+            threshold_yellow: pingConfigSetting.value.threshold_yellow || 250
+          });
+        }
       }
     } catch (err: any) {
       console.error('Erro ao carregar dados:', err);
@@ -405,6 +552,14 @@ export default function HomePage() {
             setDisplayInterval(updatedSetting.value?.displayInterval ?? 10);
             setAutoCloseInterval(updatedSetting.value?.autoCloseInterval ?? 60);
             toast.info('Configurações de alerta atualizadas!');
+          }
+          if (updatedSetting.key === 'ping_config') {
+            setPingConfig({
+              label: updatedSetting.value.label || 'Ping Real (Latência)',
+              threshold_green: updatedSetting.value.threshold_green || 120,
+              threshold_yellow: updatedSetting.value.threshold_yellow || 250
+            });
+            toast.info('Configurações globais de ping atualizadas!');
           }
         }
       )
@@ -764,9 +919,9 @@ export default function HomePage() {
                   <Card
                     key={service.id}
                     onClick={() => handleOpenReport(service)}
-                    className={`group cursor-pointer bg-zinc-950/45 border-zinc-900 transition-all duration-300 hover:translate-y-[-2px] hover:bg-zinc-950 hover:shadow-lg ${glowColor} border`}
+                    className={`group cursor-pointer bg-zinc-950/45 border-zinc-900 transition-all duration-300 hover:translate-y-[-2px] hover:bg-zinc-950 hover:shadow-lg ${glowColor} border flex flex-col`}
                   >
-                    <CardContent className="p-5 flex items-center justify-between">
+                    <CardContent className="p-5 flex-1 flex items-center justify-between">
                       <div className="flex items-center gap-3.5">
                         <div className="bg-zinc-900 border border-zinc-800 p-2.5 rounded-xl text-zinc-300 group-hover:text-white transition-colors">
                           {getServiceIcon(service.icon_name, service.category)}
@@ -798,6 +953,11 @@ export default function HomePage() {
                         )}
                       </div>
                     </CardContent>
+
+                    {/* Ping Real-time Monitor */}
+                    {service.ping_enabled && (
+                      <ServicePing service={service} config={pingConfig} />
+                    )}
                   </Card>
                 );
               })}

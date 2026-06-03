@@ -5,6 +5,9 @@ CREATE TABLE IF NOT EXISTS public.services (
     category TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'normal' CHECK (status IN ('normal', 'warning', 'critical')),
     icon_name TEXT, -- Nome do ícone do Lucide (opcional)
+    ping_enabled BOOLEAN DEFAULT FALSE,
+    ping_address TEXT DEFAULT '',
+    ping_interval INTEGER DEFAULT 30,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
 );
 
@@ -113,6 +116,10 @@ INSERT INTO public.settings (key, value) VALUES
     "issue_types": ["Lentidão de navegação", "Perda de pacotes (Packet Loss)", "Latência alta (Ping alto)", "Queda total da internet", "IPTV travando / Sem sinal"],
     "devices": ["Celular (Smartphone)", "PC / Notebook", "Smart TV / TV Box", "Videogame (Console)", "Roteador"]
 }'::jsonb)
+ON CONFLICT (key) DO NOTHING;
+
+INSERT INTO public.settings (key, value) VALUES
+('ping_config', '{"label": "Ping Real (Latência)", "threshold_green": 120, "threshold_yellow": 250}'::jsonb)
 ON CONFLICT (key) DO NOTHING;
 
 -- 9. Habilitar Realtime para as tabelas

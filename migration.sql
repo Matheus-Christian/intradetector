@@ -145,3 +145,13 @@ BEGIN
 END;
 $$;
 
+-- 6. Adicionar colunas de ping na tabela de serviços
+ALTER TABLE public.services ADD COLUMN IF NOT EXISTS ping_enabled BOOLEAN DEFAULT FALSE;
+ALTER TABLE public.services ADD COLUMN IF NOT EXISTS ping_address TEXT DEFAULT '';
+ALTER TABLE public.services ADD COLUMN IF NOT EXISTS ping_interval INTEGER DEFAULT 30;
+
+-- 7. Inserir configuração padrão global de ping
+INSERT INTO public.settings (key, value) VALUES
+('ping_config', '{"label": "Ping Real (Latência)", "threshold_green": 120, "threshold_yellow": 250}'::jsonb)
+ON CONFLICT (key) DO NOTHING;
+

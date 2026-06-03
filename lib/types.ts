@@ -6,6 +6,9 @@ export interface Service {
   category: string;
   icon_name: string;
   status: ServiceStatus;
+  ping_enabled?: boolean;
+  ping_address?: string;
+  ping_interval?: number;
 }
 
 export interface Report {
@@ -49,8 +52,14 @@ export interface FormField {
 
 export type FormSchema = FormField[];
 
+export interface PingConfig {
+  label: string;
+  threshold_green: number;
+  threshold_yellow: number;
+}
+
 export interface Setting {
   key: string;
-  value: ReportOptions | StatusThresholds | FormSchema | any;
+  value: ReportOptions | StatusThresholds | FormSchema | PingConfig | any;
   updated_at: string;
 }
