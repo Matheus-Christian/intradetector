@@ -119,7 +119,7 @@ INSERT INTO public.settings (key, value) VALUES
 ON CONFLICT (key) DO NOTHING;
 
 INSERT INTO public.settings (key, value) VALUES
-('ping_config', '{"label": "Ping Real (Latência)", "threshold_green": 120, "threshold_yellow": 250}'::jsonb)
+('ping_config', '{"label": "Ping Real (Latência)", "threshold_green": 120, "threshold_yellow": 250, "mode": "threshold"}'::jsonb)
 ON CONFLICT (key) DO NOTHING;
 
 -- 9. Habilitar Realtime para as tabelas

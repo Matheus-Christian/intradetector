@@ -152,6 +152,6 @@ ALTER TABLE public.services ADD COLUMN IF NOT EXISTS ping_interval INTEGER DEFAU
 
 -- 7. Inserir configuração padrão global de ping
 INSERT INTO public.settings (key, value) VALUES
-('ping_config', '{"label": "Ping Real (Latência)", "threshold_green": 120, "threshold_yellow": 250}'::jsonb)
+('ping_config', '{"label": "Ping Real (Latência)", "threshold_green": 120, "threshold_yellow": 250, "mode": "threshold"}'::jsonb)
 ON CONFLICT (key) DO NOTHING;
 

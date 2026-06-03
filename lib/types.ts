@@ -56,6 +56,7 @@ export interface PingConfig {
   label: string;
   threshold_green: number;
   threshold_yellow: number;
+  mode: 'threshold' | 'simple';
 }
 
 export interface Setting {

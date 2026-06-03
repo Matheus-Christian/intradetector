@@ -135,6 +135,7 @@ export default function AdminPage() {
   const [pingConfigLabel, setPingConfigLabel] = useState('Ping Real (Latência)');
   const [pingConfigGreen, setPingConfigGreen] = useState(120);
   const [pingConfigYellow, setPingConfigYellow] = useState(250);
+  const [pingConfigMode, setPingConfigMode] = useState<'threshold' | 'simple'>('threshold');
   const [pingConfigSetting, setPingConfigSetting] = useState<Setting | null>(null);
   const [isSavingPingConfig, setIsSavingPingConfig] = useState(false);
 
@@ -425,6 +426,7 @@ export default function AdminPage() {
         setPingConfigLabel(config.label || 'Ping Real (Latência)');
         setPingConfigGreen(config.threshold_green || 120);
         setPingConfigYellow(config.threshold_yellow || 250);
+        setPingConfigMode(config.mode || 'threshold');
       }
 
       // 5. Fetch Action Logs
@@ -862,7 +864,7 @@ export default function AdminPage() {
     e.preventDefault();
     setIsSavingPingConfig(true);
 
-    if (pingConfigYellow <= pingConfigGreen) {
+    if (pingConfigMode === 'threshold' && pingConfigYellow <= pingConfigGreen) {
       toast.error('O limite amarelo (moderado) deve ser maior que o limite verde (bom).');
       setIsSavingPingConfig(false);
       return;
@@ -876,13 +878,19 @@ export default function AdminPage() {
           value: {
             label: pingConfigLabel.trim(),
             threshold_green: pingConfigGreen,
-            threshold_yellow: pingConfigYellow
+            threshold_yellow: pingConfigYellow,
+            mode: pingConfigMode
           },
           updated_at: new Date().toISOString()
         });
 
       if (error) throw error;
-      await logAction('Configurar Ping Global', `Legenda: ${pingConfigLabel}, Verde: ${pingConfigGreen}ms, Amarelo: ${pingConfigYellow}ms`);
+      await logAction(
+        'Configurar Ping Global',
+        `Legenda: ${pingConfigLabel}, Modo: ${pingConfigMode}${
+          pingConfigMode === 'threshold' ? `, Verde: ${pingConfigGreen}ms, Amarelo: ${pingConfigYellow}ms` : ''
+        }`
+      );
       toast.success('Configurações globais de ping atualizadas e sincronizadas!');
       setIsPingConfigModalOpen(false);
       loadData();
@@ -4409,37 +4417,62 @@ export default function AdminPage() {
               <p className="text-[9px] text-zinc-500">O texto que aparece ao lado do medidor no rodapé dos cards públicos.</p>
             </div>
 
-            {/* Field: Green Limit */}
+            {/* Field: Mode */}
             <div className="space-y-1.5">
-              <Label htmlFor="pingConfigGreen" className="text-emerald-400 text-xs font-semibold">Limiar Verde (Conexão Boa) *</Label>
-              <Input
-                id="pingConfigGreen"
-                type="number"
-                min={1}
-                value={pingConfigGreen}
-                onChange={(e) => setPingConfigGreen(Number(e.target.value))}
-                className="bg-zinc-900 border-zinc-800 text-emerald-450 focus:border-emerald-550"
+              <Label htmlFor="pingConfigMode" className="text-zinc-300 text-xs font-semibold">Modo de Exibição *</Label>
+              <Select
+                value={pingConfigMode}
+                onValueChange={(val: 'threshold' | 'simple' | null) => setPingConfigMode(val || 'threshold')}
                 disabled={!hasWriteAccess('cards')}
-                required
-              />
-              <p className="text-[9px] text-zinc-500">Latência menor ou igual a esse valor (em ms) será mostrada em verde (saudável).</p>
+              >
+                <SelectTrigger id="pingConfigMode" className="bg-zinc-900 border-zinc-800 text-white text-xs h-9">
+                  <SelectValue placeholder="Selecione o modo" />
+                </SelectTrigger>
+                <SelectContent className="bg-zinc-900 border-zinc-805 text-white">
+                  <SelectItem value="threshold">Modo Limiar (Latência em milissegundos)</SelectItem>
+                  <SelectItem value="simple">Modo Simples (Status Online / Offline)</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-[9px] text-zinc-500">
+                No Modo Limiar a latência é exibida em ms e colorida por faixas. No Modo Simples é exibido apenas o status Online ou Offline.
+              </p>
             </div>
 
-            {/* Field: Yellow Limit */}
-            <div className="space-y-1.5">
-              <Label htmlFor="pingConfigYellow" className="text-amber-400 text-xs font-semibold">Limiar Amarelo (Conexão Moderada) *</Label>
-              <Input
-                id="pingConfigYellow"
-                type="number"
-                min={1}
-                value={pingConfigYellow}
-                onChange={(e) => setPingConfigYellow(Number(e.target.value))}
-                className="bg-zinc-900 border-zinc-800 text-amber-450 focus:border-amber-500"
-                disabled={!hasWriteAccess('cards')}
-                required
-              />
-              <p className="text-[9px] text-zinc-500">Latência entre o limiar verde e este valor será amarela. Acima disso será vermelha.</p>
-            </div>
+            {pingConfigMode === 'threshold' && (
+              <div className="space-y-4 animate-in fade-in duration-200">
+                {/* Field: Green Limit */}
+                <div className="space-y-1.5">
+                  <Label htmlFor="pingConfigGreen" className="text-emerald-400 text-xs font-semibold">Limiar Verde (Conexão Boa) *</Label>
+                  <Input
+                    id="pingConfigGreen"
+                    type="number"
+                    min={1}
+                    value={pingConfigGreen}
+                    onChange={(e) => setPingConfigGreen(Number(e.target.value))}
+                    className="bg-zinc-900 border-zinc-800 text-emerald-450 focus:border-emerald-550"
+                    disabled={!hasWriteAccess('cards')}
+                    required={pingConfigMode === 'threshold'}
+                  />
+                  <p className="text-[9px] text-zinc-500">Latência menor ou igual a esse valor (em ms) será mostrada em verde (saudável).</p>
+                </div>
+
+                {/* Field: Yellow Limit */}
+                <div className="space-y-1.5">
+                  <Label htmlFor="pingConfigYellow" className="text-amber-400 text-xs font-semibold">Limiar Amarelo (Conexão Moderada) *</Label>
+                  <Input
+                    id="pingConfigYellow"
+                    type="number"
+                    min={1}
+                    value={pingConfigYellow}
+                    onChange={(e) => setPingConfigYellow(Number(e.target.value))}
+                    className="bg-zinc-900 border-zinc-800 text-amber-450 focus:border-amber-500"
+                    disabled={!hasWriteAccess('cards')}
+                    required={pingConfigMode === 'threshold'}
+                  />
+                  <p className="text-[9px] text-zinc-500">Latência entre o limiar verde e este valor será amarela. Acima disso será vermelha.</p>
+                </div>
+              </div>
+            )}
 
             {/* Modal Buttons */}
             <div className="flex justify-end gap-3 pt-4 border-t border-zinc-800 mt-2">

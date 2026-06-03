@@ -135,37 +135,56 @@ function ServicePing({ service, config }: ServicePingProps) {
           </span>
         )}
 
-        {status === 'timeout' && (
-          <Badge className="bg-red-500/10 text-red-400 border border-red-500/20 text-[9px] font-semibold px-1.5 py-0 rounded-md flex items-center gap-1">
-            <Icons.XCircle className="h-3 w-3 shrink-0" />
-            Esgotado (Offline)
-          </Badge>
-        )}
-
-        {status === 'error' && (
-          <Badge className="bg-red-500/10 text-red-400 border border-red-500/20 text-[9px] font-semibold px-1.5 py-0 rounded-md flex items-center gap-1">
-            <Icons.AlertOctagon className="h-3 w-3 shrink-0" />
-            Falha
-          </Badge>
-        )}
-
-        {status === 'success' && latency !== null && (
+        {config.mode === 'simple' ? (
           <>
-            {latency < config.threshold_green ? (
+            {status === 'success' && (
               <Badge className="bg-emerald-500/10 text-emerald-405 border border-emerald-500/20 text-[9px] font-bold px-1.5 py-0 rounded-md flex items-center gap-1">
                 <span className="h-1 w-1 rounded-full bg-emerald-500" />
-                {latency} ms
+                Online
               </Badge>
-            ) : latency < config.threshold_yellow ? (
-              <Badge className="bg-amber-500/10 text-amber-450 border border-amber-500/20 text-[9px] font-bold px-1.5 py-0 rounded-md flex items-center gap-1">
-                <span className="h-1 w-1 rounded-full bg-amber-500 animate-pulse" />
-                {latency} ms
-              </Badge>
-            ) : (
+            )}
+            {(status === 'timeout' || status === 'error') && (
               <Badge className="bg-red-500/10 text-red-400 border border-red-500/20 text-[9px] font-bold px-1.5 py-0 rounded-md flex items-center gap-1">
-                <span className="h-1 w-1 rounded-full bg-red-550 animate-pulse" />
-                {latency} ms
+                <span className="h-1 w-1 rounded-full bg-red-500 animate-pulse" />
+                Offline
               </Badge>
+            )}
+          </>
+        ) : (
+          <>
+            {status === 'timeout' && (
+              <Badge className="bg-red-500/10 text-red-400 border border-red-500/20 text-[9px] font-semibold px-1.5 py-0 rounded-md flex items-center gap-1">
+                <Icons.XCircle className="h-3 w-3 shrink-0" />
+                Esgotado (Offline)
+              </Badge>
+            )}
+
+            {status === 'error' && (
+              <Badge className="bg-red-500/10 text-red-400 border border-red-500/20 text-[9px] font-semibold px-1.5 py-0 rounded-md flex items-center gap-1">
+                <Icons.AlertOctagon className="h-3 w-3 shrink-0" />
+                Falha
+              </Badge>
+            )}
+
+            {status === 'success' && latency !== null && (
+              <>
+                {latency < config.threshold_green ? (
+                  <Badge className="bg-emerald-500/10 text-emerald-405 border border-emerald-500/20 text-[9px] font-bold px-1.5 py-0 rounded-md flex items-center gap-1">
+                    <span className="h-1 w-1 rounded-full bg-emerald-500" />
+                    {latency} ms
+                  </Badge>
+                ) : latency < config.threshold_yellow ? (
+                  <Badge className="bg-amber-500/10 text-amber-450 border border-amber-500/20 text-[9px] font-bold px-1.5 py-0 rounded-md flex items-center gap-1">
+                    <span className="h-1 w-1 rounded-full bg-amber-500 animate-pulse" />
+                    {latency} ms
+                  </Badge>
+                ) : (
+                  <Badge className="bg-red-500/10 text-red-400 border border-red-500/20 text-[9px] font-bold px-1.5 py-0 rounded-md flex items-center gap-1">
+                    <span className="h-1 w-1 rounded-full bg-red-550 animate-pulse" />
+                    {latency} ms
+                  </Badge>
+                )}
+              </>
             )}
           </>
         )}
@@ -214,7 +233,8 @@ export default function HomePage() {
   const [pingConfig, setPingConfig] = useState<PingConfig>({
     label: 'Ping Real (Latência)',
     threshold_green: 120,
-    threshold_yellow: 250
+    threshold_yellow: 250,
+    mode: 'threshold'
   });
 
   const resetTimestamp = useMemo(() => {
@@ -474,7 +494,8 @@ export default function HomePage() {
           setPingConfig({
             label: pingConfigSetting.value.label || 'Ping Real (Latência)',
             threshold_green: pingConfigSetting.value.threshold_green || 120,
-            threshold_yellow: pingConfigSetting.value.threshold_yellow || 250
+            threshold_yellow: pingConfigSetting.value.threshold_yellow || 250,
+            mode: pingConfigSetting.value.mode || 'threshold'
           });
         }
       }
@@ -557,7 +578,8 @@ export default function HomePage() {
             setPingConfig({
               label: updatedSetting.value.label || 'Ping Real (Latência)',
               threshold_green: updatedSetting.value.threshold_green || 120,
-              threshold_yellow: updatedSetting.value.threshold_yellow || 250
+              threshold_yellow: updatedSetting.value.threshold_yellow || 250,
+              mode: updatedSetting.value.mode || 'threshold'
             });
             toast.info('Configurações globais de ping atualizadas!');
           }
