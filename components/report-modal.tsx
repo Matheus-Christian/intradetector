@@ -194,23 +194,27 @@ export default function ReportModal({
         customFieldsWithAlert.active_alert = activeAlert.title;
       }
 
-      // Build bulk insert data
-      const reportsToInsert = [
-        {
-          service_id: service.id,
-          region: dynamicData['region'] || null,
-          connection_type: dynamicData['connection_type'] || null,
-          issue_type: dynamicData['issue_type'] || null,
-          device: dynamicData['device'] || null,
-          custom_fields: customFieldsWithAlert,
-          tests_done: null,
-          is_resolved: isResolved === 'true',
-        }
-      ];
+      // Enviar relato do serviço principal
+      const mainReport = {
+        service_id: service.id,
+        region: dynamicData['region'] || null,
+        connection_type: dynamicData['connection_type'] || null,
+        issue_type: dynamicData['issue_type'] || null,
+        device: dynamicData['device'] || null,
+        custom_fields: customFieldsWithAlert,
+        tests_done: null,
+        is_resolved: isResolved === 'true',
+      };
 
-      // Add related services
-      relatedServiceIds.forEach(id => {
-        reportsToInsert.push({
+      const { error: mainError } = await supabase.from('reports').insert(mainReport);
+      if (mainError) throw mainError;
+
+      // Enviar relatos dos serviços relacionados sequencialmente com um atraso de 200ms
+      for (const id of relatedServiceIds) {
+        // Aguarda 200ms antes do próximo envio
+        await new Promise(resolve => setTimeout(resolve, 200));
+
+        const relatedReport = {
           service_id: id,
           region: dynamicData['region'] || null,
           connection_type: dynamicData['connection_type'] || null,
@@ -219,12 +223,11 @@ export default function ReportModal({
           custom_fields: customFieldsWithAlert,
           tests_done: null,
           is_resolved: isResolved === 'true',
-        });
-      });
+        };
 
-      const { error } = await supabase.from('reports').insert(reportsToInsert);
-
-      if (error) throw error;
+        const { error: relatedError } = await supabase.from('reports').insert(relatedReport);
+        if (relatedError) throw relatedError;
+      }
 
       if (relatedServiceIds.length > 0) {
         toast.success(`Relato para ${service.name} e outros ${relatedServiceIds.length} serviços enviado com sucesso!`);
