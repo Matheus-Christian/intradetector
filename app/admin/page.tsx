@@ -160,6 +160,7 @@ export default function AdminPage() {
   const [isUserModalOpen, setIsUserModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<any | null>(null);
   const [userFormEmail, setUserFormEmail] = useState('');
+  const [userFormName, setUserFormName] = useState('');
   const [userFormPassword, setUserFormPassword] = useState('');
   const [userFormRole, setUserFormRole] = useState<'superadmin' | 'admin'>('admin');
   const [userFormPermissions, setUserFormPermissions] = useState<Record<string, boolean | 'read' | 'write' | 'none'>>({
@@ -170,6 +171,25 @@ export default function AdminPage() {
     logs: false
   });
   const [isSavingUser, setIsSavingUser] = useState(false);
+  const [searchUsersQuery, setSearchUsersQuery] = useState('');
+
+  const filteredUsers = useMemo(() => {
+    if (!searchUsersQuery.trim()) return adminUsersList;
+    const q = searchUsersQuery.toLowerCase();
+    return adminUsersList.filter(u => 
+      (u.email && u.email.toLowerCase().includes(q)) || 
+      (u.name && u.name.toLowerCase().includes(q))
+    );
+  }, [adminUsersList, searchUsersQuery]);
+
+  const userGreeting = useMemo(() => {
+    if (!currentUserProfile) return '';
+    const rawName = currentUserProfile.name || currentUserProfile.email || '';
+    if (!rawName) return 'Usuário';
+    const namePart = rawName.includes('@') ? rawName.split('@')[0] : rawName;
+    const firstName = namePart.split(' ')[0];
+    return firstName.charAt(0).toUpperCase() + firstName.slice(1);
+  }, [currentUserProfile]);
 
   const hasWriteAccess = (tab: 'cards' | 'form' | 'rules' | 'alerts' | 'logs') => {
     if (!currentUserProfile) return false;
@@ -476,6 +496,7 @@ export default function AdminPage() {
   };
 
   const handleLogout = async () => {
+    await logAction('Logout no Painel', 'Usuário realizou logout com sucesso do painel administrativo.');
     await supabase.auth.signOut();
     toast.success('Desconectado com sucesso.');
     router.push('/login');
@@ -972,7 +993,6 @@ export default function AdminPage() {
       }
 
       toast.success('Alerta deletado com sucesso!');
-      setNetworkAlerts(updatedAlerts);
     } catch (err: any) {
       toast.error(`Erro ao deletar alerta: ${err.message}`);
     }
@@ -982,6 +1002,7 @@ export default function AdminPage() {
   const handleOpenAddUser = () => {
     setEditingUser(null);
     setUserFormEmail('');
+    setUserFormName('');
     setUserFormPassword('');
     setUserFormRole('admin');
     setUserFormPermissions({ cards: false, form: false, rules: false, alerts: false, logs: false });
@@ -991,6 +1012,7 @@ export default function AdminPage() {
   const handleOpenEditUser = (user: any) => {
     setEditingUser(user);
     setUserFormEmail(user.email);
+    setUserFormName(user.name || '');
     setUserFormPassword('');
     setUserFormRole(user.role);
     setUserFormPermissions(user.permissions || { cards: false, form: false, rules: false, alerts: false, logs: false });
@@ -1001,6 +1023,10 @@ export default function AdminPage() {
     e.preventDefault();
     if (!userFormEmail.trim()) {
       toast.error('O e-mail é obrigatório.');
+      return;
+    }
+    if (!userFormName.trim()) {
+      toast.error('O nome é obrigatório.');
       return;
     }
     if (!editingUser && !userFormPassword.trim()) {
@@ -1018,6 +1044,7 @@ export default function AdminPage() {
           if (u.email.toLowerCase() === editingUser.email.toLowerCase()) {
             return {
               ...u,
+              name: userFormName.trim(),
               role: userFormRole,
               permissions: userFormRole === 'superadmin' 
                 ? { cards: true, form: true, rules: true, alerts: true, logs: true }
@@ -1034,7 +1061,7 @@ export default function AdminPage() {
         });
         if (error) throw error;
         
-        await logAction('Editar Usuário', `Editou permissões do usuário ${userFormEmail}.`);
+        await logAction('Editar Usuário', `Editou permissões e nome do usuário ${userFormEmail}.`);
         toast.success('Usuário atualizado com sucesso!');
       } else {
         // CREATING NEW USER
@@ -1054,6 +1081,7 @@ export default function AdminPage() {
 
         const newUser = {
           email: userFormEmail.trim().toLowerCase(),
+          name: userFormName.trim(),
           role: userFormRole,
           permissions: userFormRole === 'superadmin'
             ? { cards: true, form: true, rules: true, alerts: true, logs: true }
@@ -1449,6 +1477,12 @@ export default function AdminPage() {
           >
             <RefreshCw className="h-4 w-4" />
           </Button>
+
+          {currentUserProfile && (
+            <span className="text-xs text-zinc-400 select-none mr-1 hidden md:inline">
+              Bem-vindo(a), <span className="font-semibold text-zinc-250">{userGreeting}</span>
+            </span>
+          )}
 
           <Button
             onClick={handleLogout}
@@ -3539,105 +3573,139 @@ export default function AdminPage() {
                         Nenhum usuário administrativo cadastrado.
                       </div>
                     ) : (
-                      <div className="overflow-x-auto rounded-lg border border-zinc-900">
-                        <Table className="bg-zinc-950/80">
-                          <TableHeader className="bg-zinc-900/50 border-zinc-850">
-                            <TableRow className="hover:bg-zinc-900/20">
-                              <TableHead className="text-zinc-400 font-semibold">Usuário</TableHead>
-                              <TableHead className="text-zinc-400 font-semibold">Cargo</TableHead>
-                              <TableHead className="text-zinc-400 font-semibold">Permissões Permitidas</TableHead>
-                              <TableHead className="text-zinc-400 font-semibold text-right">Ações</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {adminUsersList.map((user) => {
-                              const isSelf = user.email.toLowerCase() === currentUserProfile?.email.toLowerCase();
-                              return (
-                                <TableRow key={user.email} className="hover:bg-zinc-900/30 border-zinc-900">
-                                  <TableCell className="font-bold text-white text-sm whitespace-nowrap">
-                                    <div className="flex items-center gap-1.5">
-                                      <span>{user.email}</span>
-                                      {isSelf && (
-                                        <Badge className="bg-indigo-500/15 text-indigo-400 border border-indigo-500/20 text-[9px] px-1.5 font-medium">Você</Badge>
-                                      )}
-                                    </div>
-                                  </TableCell>
-                                  <TableCell className="whitespace-nowrap">
-                                    {user.role === 'superadmin' ? (
-                                      <Badge className="bg-red-500/15 text-red-400 border border-red-500/20 text-[10px]">Superadmin</Badge>
-                                    ) : (
-                                      <Badge className="bg-zinc-850 text-zinc-400 border border-zinc-800 text-[10px]">Admin</Badge>
-                                    )}
-                                  </TableCell>
-                                  <TableCell>
-                                    <div className="flex flex-wrap gap-1.5">
-                                      {user.role === 'superadmin' ? (
-                                        <Badge className="bg-emerald-500/15 text-emerald-400 border border-emerald-500/20 text-[9px]">Acesso Total</Badge>
-                                      ) : (
-                                        <>
-                                          {(() => {
-                                            const renderedBadges = [
-                                              { key: 'cards', label: 'Cards' },
-                                              { key: 'form', label: 'Formulário' },
-                                              { key: 'rules', label: 'Regras' },
-                                              { key: 'alerts', label: 'Alertas' },
-                                              { key: 'logs', label: 'Logs' }
-                                            ].map(({ key, label }) => {
-                                              const val = user.permissions?.[key];
-                                              if (!val || val === 'none' || val === false) return null;
-                                              const isWrite = val === 'write';
-                                              return (
-                                                <Badge 
-                                                  key={key} 
-                                                  variant="outline" 
-                                                  className={`text-[9px] ${
-                                                    isWrite 
-                                                      ? 'border-indigo-550/30 text-indigo-400 bg-indigo-500/5' 
-                                                      : 'border-zinc-800 text-zinc-400 bg-transparent'
-                                                  }`}
-                                                >
-                                                  {label} {isWrite ? '(Modificar)' : '(Leitura)'}
-                                                </Badge>
-                                              );
-                                            }).filter(Boolean);
+                      <div className="space-y-4">
+                        {/* SEARCH INPUT BAR */}
+                        <div className="relative w-full max-w-sm">
+                          <Icons.Search className="absolute left-3 top-2.5 h-4 w-4 text-zinc-550" />
+                          <Input
+                            type="text"
+                            placeholder="Buscar usuários por nome ou e-mail..."
+                            value={searchUsersQuery}
+                            onChange={(e) => setSearchUsersQuery(e.target.value)}
+                            className="pl-9 bg-zinc-900/40 border-zinc-900 focus:border-zinc-800 text-zinc-200 placeholder-zinc-550 text-xs rounded-xl"
+                          />
+                          {searchUsersQuery && (
+                            <button
+                              type="button"
+                              onClick={() => setSearchUsersQuery('')}
+                              className="absolute right-3 top-2.5 hover:text-white text-zinc-500 transition-colors"
+                              title="Limpar pesquisa"
+                            >
+                              <Icons.X className="h-4 w-4" />
+                            </button>
+                          )}
+                        </div>
 
-                                            return renderedBadges.length > 0 ? renderedBadges : (
-                                              <span className="text-zinc-550 text-[11px]">Nenhum acesso</span>
-                                            );
-                                          })()}
-                                        </>
-                                      )}
-                                    </div>
-                                  </TableCell>
-                                  <TableCell className="text-right">
-                                    <div className="flex justify-end gap-1.5">
-                                      <Button
-                                        onClick={() => handleOpenEditUser(user)}
-                                        variant="ghost"
-                                        size="icon"
-                                        className="h-8 w-8 text-indigo-400 hover:text-indigo-300 hover:bg-indigo-500/10 rounded-lg"
-                                        title="Editar permissões"
-                                      >
-                                        <Edit2 className="h-3.5 w-3.5" />
-                                      </Button>
-                                      {!isSelf && (
-                                        <Button
-                                          onClick={() => handleDeleteUser(user.email)}
-                                          variant="ghost"
-                                          size="icon"
-                                          className="h-8 w-8 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg"
-                                          title="Remover usuário"
-                                        >
-                                          <Trash2 className="h-3.5 w-3.5" />
-                                        </Button>
-                                      )}
-                                    </div>
-                                  </TableCell>
+                        {filteredUsers.length === 0 ? (
+                          <div className="text-center py-12 text-zinc-550 border border-zinc-900 rounded-xl bg-zinc-950/30 text-xs">
+                            Nenhum usuário correspondente encontrado para a pesquisa.
+                          </div>
+                        ) : (
+                          <div className="overflow-x-auto rounded-lg border border-zinc-900">
+                            <Table className="bg-zinc-950/80">
+                              <TableHeader className="bg-zinc-900/50 border-zinc-850">
+                                <TableRow className="hover:bg-zinc-900/20">
+                                  <TableHead className="text-zinc-400 font-semibold">Nome</TableHead>
+                                  <TableHead className="text-zinc-400 font-semibold">Usuário (E-mail)</TableHead>
+                                  <TableHead className="text-zinc-400 font-semibold">Cargo</TableHead>
+                                  <TableHead className="text-zinc-400 font-semibold">Permissões Permitidas</TableHead>
+                                  <TableHead className="text-zinc-400 font-semibold text-right">Ações</TableHead>
                                 </TableRow>
-                              );
-                            })}
-                          </TableBody>
-                        </Table>
+                              </TableHeader>
+                              <TableBody>
+                                {filteredUsers.map((user) => {
+                                  const isSelf = user.email.toLowerCase() === currentUserProfile?.email.toLowerCase();
+                                  return (
+                                    <TableRow key={user.email} className="hover:bg-zinc-900/30 border-zinc-900">
+                                      <TableCell className="font-semibold text-zinc-300 text-sm whitespace-nowrap">
+                                        {user.name || '-'}
+                                      </TableCell>
+                                      <TableCell className="font-bold text-white text-sm whitespace-nowrap">
+                                        <div className="flex items-center gap-1.5">
+                                          <span>{user.email}</span>
+                                          {isSelf && (
+                                            <Badge className="bg-indigo-500/15 text-indigo-400 border border-indigo-500/20 text-[9px] px-1.5 font-medium">Você</Badge>
+                                          )}
+                                        </div>
+                                      </TableCell>
+                                      <TableCell className="whitespace-nowrap">
+                                        {user.role === 'superadmin' ? (
+                                          <Badge className="bg-red-500/15 text-red-400 border border-red-500/20 text-[10px]">Superadmin</Badge>
+                                        ) : (
+                                          <Badge className="bg-zinc-850 text-zinc-400 border border-zinc-800 text-[10px]">Admin</Badge>
+                                        )}
+                                      </TableCell>
+                                      <TableCell>
+                                        <div className="flex flex-wrap gap-1.5">
+                                          {user.role === 'superadmin' ? (
+                                            <Badge className="bg-emerald-500/15 text-emerald-400 border border-emerald-500/20 text-[9px]">Acesso Total</Badge>
+                                          ) : (
+                                            <>
+                                              {(() => {
+                                                const renderedBadges = [
+                                                  { key: 'cards', label: 'Cards' },
+                                                  { key: 'form', label: 'Formulário' },
+                                                  { key: 'rules', label: 'Regras' },
+                                                  { key: 'alerts', label: 'Alertas' },
+                                                  { key: 'logs', label: 'Logs' }
+                                                ].map(({ key, label }) => {
+                                                  const val = user.permissions?.[key];
+                                                  if (!val || val === 'none' || val === false) return null;
+                                                  const isWrite = val === 'write';
+                                                  return (
+                                                    <Badge 
+                                                      key={key} 
+                                                      variant="outline" 
+                                                      className={`text-[9px] ${
+                                                        isWrite 
+                                                          ? 'border-indigo-550/30 text-indigo-400 bg-indigo-500/5' 
+                                                          : 'border-zinc-800 text-zinc-400 bg-transparent'
+                                                      }`}
+                                                    >
+                                                      {label} {isWrite ? '(Modificar)' : '(Leitura)'}
+                                                    </Badge>
+                                                  );
+                                                }).filter(Boolean);
+
+                                                return renderedBadges.length > 0 ? renderedBadges : (
+                                                  <span className="text-zinc-550 text-[11px]">Nenhum acesso</span>
+                                                );
+                                              })()}
+                                            </>
+                                          )}
+                                        </div>
+                                      </TableCell>
+                                      <TableCell className="text-right">
+                                        <div className="flex justify-end gap-1.5">
+                                          <Button
+                                            onClick={() => handleOpenEditUser(user)}
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-8 w-8 text-indigo-400 hover:text-indigo-300 hover:bg-indigo-500/10 rounded-lg"
+                                            title="Editar permissões"
+                                          >
+                                            <Edit2 className="h-3.5 w-3.5" />
+                                          </Button>
+                                          {!isSelf && (
+                                            <Button
+                                              onClick={() => handleDeleteUser(user.email)}
+                                              variant="ghost"
+                                              size="icon"
+                                              className="h-8 w-8 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg"
+                                              title="Remover usuário"
+                                            >
+                                              <Trash2 className="h-3.5 w-3.5" />
+                                            </Button>
+                                          )}
+                                        </div>
+                                      </TableCell>
+                                    </TableRow>
+                                  );
+                                })}
+                              </TableBody>
+                            </Table>
+                          </div>
+                        )}
                       </div>
                     )}
                   </CardContent>
@@ -3663,7 +3731,7 @@ export default function AdminPage() {
 
       {/* SERVICE ADD/EDIT MODAL */}
       <Dialog open={isServiceModalOpen} onOpenChange={(open) => !open && setIsServiceModalOpen(false)}>
-        <DialogContent className="max-w-md w-full bg-zinc-950 border border-zinc-800 text-white rounded-2xl p-6">
+        <DialogContent className="max-w-md w-full bg-zinc-950 border border-zinc-800 text-white rounded-2xl p-6 max-h-[90vh] overflow-y-auto custom-scrollbar">
           <DialogHeader>
             <DialogTitle className="text-xl font-bold flex items-center gap-2">
               <Shield className="h-5 w-5 text-indigo-400" />
@@ -3736,7 +3804,7 @@ export default function AdminPage() {
 
       {/* NETWORK ALERT ADD/EDIT MODAL */}
       <Dialog open={isAlertModalOpen} onOpenChange={(open) => !open && setIsAlertModalOpen(false)}>
-        <DialogContent className="max-w-md w-full bg-zinc-950 border border-zinc-800 text-white rounded-2xl p-6">
+        <DialogContent className="max-w-md w-full bg-zinc-950 border border-zinc-800 text-white rounded-2xl p-6 max-h-[90vh] overflow-y-auto custom-scrollbar">
           <DialogHeader>
             <DialogTitle className="text-xl font-bold flex items-center gap-2">
               <AlertCircle className="h-5 w-5 text-amber-500 animate-pulse" />
@@ -3846,7 +3914,7 @@ export default function AdminPage() {
 
       {/* USER MANAGEMENT ADD/EDIT MODAL */}
       <Dialog open={isUserModalOpen} onOpenChange={(open) => !open && setIsUserModalOpen(false)}>
-        <DialogContent className="max-w-md w-full bg-zinc-950 border border-zinc-800 text-white rounded-2xl p-6">
+        <DialogContent className="max-w-md w-full bg-zinc-950 border border-zinc-800 text-white rounded-2xl p-6 max-h-[90vh] overflow-y-auto custom-scrollbar">
           <DialogHeader>
             <DialogTitle className="text-xl font-bold flex items-center gap-2">
               <Shield className="h-5 w-5 text-indigo-400" />
@@ -3858,6 +3926,19 @@ export default function AdminPage() {
           </DialogHeader>
 
           <form onSubmit={handleSaveUser} className="space-y-4 mt-4">
+            {/* Field: Name */}
+            <div className="space-y-1.5">
+              <Label htmlFor="userName" className="text-zinc-300 text-xs font-semibold">Nome Completo *</Label>
+              <Input
+                id="userName"
+                value={userFormName}
+                onChange={(e) => setUserFormName(e.target.value)}
+                placeholder="Ex: João Silva"
+                className="bg-zinc-900 border-zinc-800 text-white placeholder-zinc-550 focus:border-indigo-500"
+                required
+              />
+            </div>
+
             {/* Field: Email */}
             <div className="space-y-1.5">
               <Label htmlFor="userEmail" className="text-zinc-300 text-xs font-semibold">E-mail de Acesso *</Label>
@@ -3866,7 +3947,7 @@ export default function AdminPage() {
                 type="email"
                 value={userFormEmail}
                 onChange={(e) => setUserFormEmail(e.target.value)}
-                placeholder="Ex: operador@empresa.com"
+                placeholder="Ex: usuario@empresa.com"
                 className="bg-zinc-900 border-zinc-800 text-white placeholder-zinc-550 focus:border-indigo-500"
                 disabled={!!editingUser}
                 required
@@ -3969,7 +4050,7 @@ export default function AdminPage() {
 
       {/* CATEGORY MANAGEMENT MODAL */}
       <Dialog open={isCategoryModalOpen} onOpenChange={(open) => !open && setIsCategoryModalOpen(false)}>
-        <DialogContent className="sm:max-w-4xl max-w-4xl w-full bg-zinc-950 border border-zinc-800 text-white rounded-2xl p-6">
+        <DialogContent className="sm:max-w-4xl max-w-4xl w-full bg-zinc-950 border border-zinc-800 text-white rounded-2xl p-6 max-h-[90vh] overflow-y-auto custom-scrollbar">
           <DialogHeader>
             <DialogTitle className="text-xl font-bold flex items-center gap-2">
               <Layers className="h-5 w-5 text-indigo-400" />
