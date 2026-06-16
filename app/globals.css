@@ -128,4 +128,10 @@
   html {
     @apply font-sans;
   }
+  ::selection {
+    @apply bg-indigo-200 text-indigo-950;
+  }
+  .dark ::selection {
+    @apply bg-indigo-950 text-indigo-200;
+  }
 }

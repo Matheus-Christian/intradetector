@@ -63,25 +63,25 @@ function SearchableSelect({
           role="combobox"
           aria-expanded={open}
           className={cn(
-            'w-full flex items-center justify-between bg-zinc-900 border border-zinc-800 text-left font-normal h-10 px-3 rounded-md cursor-pointer hover:border-zinc-700 transition-colors',
-            value ? 'text-white' : 'text-zinc-500'
+            'w-full flex items-center justify-between bg-white border border-zinc-300 text-left font-normal h-10 px-3 rounded-md cursor-pointer hover:border-zinc-400 transition-colors',
+            value ? 'text-zinc-900' : 'text-zinc-500'
           )}
         >
           <span className="truncate text-sm">{value || placeholder}</span>
-          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 text-zinc-400" />
+          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 text-zinc-500" />
         </div>
       </PopoverTrigger>
       <PopoverContent
-        className="p-0 bg-zinc-900 border-zinc-800 w-[var(--radix-popover-trigger-width)]"
+        className="p-0 bg-white border-zinc-200 w-[var(--radix-popover-trigger-width)] shadow-lg"
         align="start"
         sideOffset={4}
       >
-        <Command className="bg-zinc-900">
+        <Command className="bg-white">
           <CommandInput
             placeholder="Pesquisar..."
-            className="text-white placeholder-zinc-500 border-b border-zinc-800"
+            className="text-black placeholder-zinc-400 border-b border-zinc-200"
           />
-          <CommandList className="max-h-56 overflow-y-auto">
+          <CommandList className="max-h-56 overflow-y-auto bg-white">
             <CommandEmpty className="py-4 text-center text-sm text-zinc-500">
               Nenhuma opção encontrada.
             </CommandEmpty>
@@ -94,12 +94,12 @@ function SearchableSelect({
                     onChange(opt === value ? '' : opt);
                     setOpen(false);
                   }}
-                  className="text-zinc-300 hover:bg-zinc-800 aria-selected:bg-zinc-800 cursor-pointer whitespace-normal py-2"
+                  className="text-zinc-700 hover:bg-zinc-100 aria-selected:bg-zinc-100 cursor-pointer whitespace-normal py-2"
                 >
                   <Check
                     className={cn(
                       'mr-2 h-4 w-4 shrink-0',
-                      value === opt ? 'opacity-100 text-indigo-400' : 'opacity-0'
+                      value === opt ? 'opacity-100 text-indigo-650' : 'opacity-0'
                     )}
                   />
                   <span className="whitespace-normal leading-snug">{opt}</span>
@@ -247,17 +247,17 @@ export default function ReportModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-md w-full bg-zinc-950 border border-zinc-800 text-white rounded-2xl shadow-2xl p-6 overflow-y-auto max-h-[90vh]">
+      <DialogContent className="max-w-md w-full bg-white border border-zinc-200 text-black rounded-2xl shadow-2xl p-6 overflow-y-auto max-h-[90vh]">
         <DialogHeader className="space-y-1.5">
           <DialogTitle className="text-xl font-bold flex items-center gap-2">
             <span>Relatar Instabilidade</span>
             {service && (
-              <span className="px-2.5 py-0.5 text-xs font-semibold rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+              <span className="px-2.5 py-0.5 text-xs font-semibold rounded-full bg-indigo-50 text-indigo-750 border border-indigo-200">
                 {service.name}
               </span>
             )}
           </DialogTitle>
-          <DialogDescription className="text-zinc-400 text-sm">
+          <DialogDescription className="text-zinc-505 text-sm">
             Selecione as informações técnicas da instabilidade para nos ajudar a identificar o problema.
           </DialogDescription>
         </DialogHeader>
@@ -265,8 +265,8 @@ export default function ReportModal({
         <form onSubmit={handleSubmit} className="space-y-4 mt-4">
           {schema.map((field) => (
             <div key={field.id} className="space-y-1.5">
-              <Label htmlFor={field.id} className="text-zinc-300 text-xs font-semibold">
-                {field.label} {field.required && <span className="text-red-400">*</span>}
+              <Label htmlFor={field.id} className="text-zinc-700 text-xs font-semibold">
+                {field.label} {field.required && <span className="text-red-500">*</span>}
               </Label>
               {field.type === 'select' ? (
                 <SearchableSelect
@@ -283,7 +283,7 @@ export default function ReportModal({
                   value={dynamicData[field.id] || ''}
                   onChange={(e) => setDynamicData((prev) => ({ ...prev, [field.id]: e.target.value }))}
                   required={field.required}
-                  className="bg-zinc-900 border-zinc-800 text-white placeholder-zinc-500"
+                  className="bg-white border-zinc-300 text-black placeholder-zinc-400 focus-visible:ring-indigo-500"
                   placeholder="Digite aqui..."
                 />
               )}
@@ -292,7 +292,7 @@ export default function ReportModal({
 
           {/* O problema foi resolvido? */}
           <div className="space-y-2 pt-1">
-            <Label className="text-zinc-300 text-xs font-semibold block">O problema foi resolvido?</Label>
+            <Label className="text-zinc-705 text-xs font-semibold block">O problema foi resolvido?</Label>
             <div className="flex gap-3">
               {[
                 { value: 'false', label: 'Não, ainda persiste' },
@@ -306,9 +306,9 @@ export default function ReportModal({
                     'flex-1 py-2 px-3 rounded-xl text-xs font-semibold border transition-all',
                     isResolved === opt.value
                       ? opt.value === 'false'
-                        ? 'bg-red-500/10 border-red-500/40 text-red-400'
-                        : 'bg-emerald-500/10 border-emerald-500/40 text-emerald-400'
-                      : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:border-zinc-700 hover:text-white'
+                        ? 'bg-red-50 border-red-350 text-red-700'
+                        : 'bg-emerald-50 border-emerald-350 text-emerald-700'
+                      : 'bg-white border-zinc-300 text-zinc-650 hover:border-zinc-400 hover:text-black'
                   )}
                 >
                   {opt.label}
@@ -319,22 +319,22 @@ export default function ReportModal({
 
           {/* Relacionar com outros serviços (Opcional) */}
           {showRelatedServices && (
-            <div className="space-y-2 pt-3.5 border-t border-zinc-900">
-              <Label className="text-zinc-300 text-xs font-semibold block">Relacionar com outros serviços afetados? (Opcional)</Label>
+            <div className="space-y-2 pt-3.5 border-t border-zinc-200">
+              <Label className="text-zinc-705 text-xs font-semibold block">Relacionar com outros serviços afetados? (Opcional)</Label>
               
               {/* Selected items tags */}
               {relatedServiceIds.length > 0 && (
-                <div className="flex flex-wrap gap-1.5 mb-2 max-h-24 overflow-y-auto p-2 bg-zinc-900/35 border border-zinc-900 rounded-lg">
+                <div className="flex flex-wrap gap-1.5 mb-2 max-h-24 overflow-y-auto p-2 bg-zinc-50 border border-zinc-200 rounded-lg">
                   {relatedServiceIds.map(id => {
                     const s = services.find(srv => srv.id === id);
                     if (!s) return null;
                     return (
-                      <span key={id} className="inline-flex items-center gap-1 bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-2 py-0.5 rounded text-[11px] font-semibold">
+                      <span key={id} className="inline-flex items-center gap-1 bg-indigo-50 text-indigo-700 border border-indigo-200 px-2 py-0.5 rounded text-[11px] font-semibold">
                         {s.name}
                         <button
                           type="button"
                           onClick={() => setRelatedServiceIds(prev => prev.filter(item => item !== id))}
-                          className="hover:text-indigo-200 transition-colors cursor-pointer ml-1"
+                          className="hover:text-indigo-900 transition-colors cursor-pointer ml-1"
                         >
                           <X className="h-3 w-3" />
                         </button>
@@ -357,7 +357,7 @@ export default function ReportModal({
                       setIsDropdownOpen(true);
                     }}
                     onFocus={() => setIsDropdownOpen(true)}
-                    className="w-full bg-zinc-900 border border-zinc-800 text-white placeholder-zinc-555 rounded-md h-9 pl-9 pr-8 text-xs focus:outline-none focus:border-zinc-700 transition-all"
+                    className="w-full bg-white border border-zinc-300 text-black placeholder-zinc-400 rounded-md h-9 pl-9 pr-8 text-xs focus:outline-none focus:border-indigo-500 transition-all"
                   />
                   {relatedSearch && (
                     <button
@@ -371,7 +371,7 @@ export default function ReportModal({
                 </div>
 
                 {isDropdownOpen && (
-                  <div className="absolute left-0 right-0 mt-1 max-h-40 overflow-y-auto bg-zinc-900 border border-zinc-800 rounded-md shadow-2xl z-50 py-1 text-xs">
+                  <div className="absolute left-0 right-0 mt-1 max-h-40 overflow-y-auto bg-white border border-zinc-200 rounded-md shadow-lg z-50 py-1 text-xs">
                     {filteredServices.length === 0 ? (
                       <div className="py-2.5 text-center text-zinc-500">Nenhum outro serviço encontrado.</div>
                     ) : (
@@ -389,8 +389,8 @@ export default function ReportModal({
                               }
                             }}
                             className={cn(
-                              "w-full text-left px-3 py-2 flex items-center justify-between transition-colors hover:bg-zinc-850",
-                              isSelected ? "text-indigo-400 bg-zinc-850/50" : "text-zinc-300"
+                              "w-full text-left px-3 py-2 flex items-center justify-between transition-colors hover:bg-zinc-100",
+                              isSelected ? "text-indigo-700 bg-indigo-50" : "text-zinc-650"
                             )}
                           >
                             <span>{s.name}</span>
@@ -406,12 +406,12 @@ export default function ReportModal({
           )}
 
           {/* Botões */}
-          <div className="flex justify-end gap-3 pt-4 border-t border-zinc-800">
+          <div className="flex justify-end gap-3 pt-4 border-t border-zinc-200">
             <Button
               type="button"
               variant="outline"
               onClick={onClose}
-              className="border-zinc-800 hover:bg-zinc-900 text-zinc-400 hover:text-white"
+              className="border-zinc-350 hover:bg-zinc-100 text-zinc-600 hover:text-black"
             >
               Cancelar
             </Button>

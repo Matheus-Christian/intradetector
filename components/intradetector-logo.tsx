@@ -30,7 +30,7 @@ export default function IntradetectorLogo({
         style={{ fontFamily: 'var(--font-sans), sans-serif' }}
       >
         <span className="text-red-500">Intra</span>
-        <span className="text-white">detector</span>
+        <span className="text-black dark:text-white">detector</span>
       </span>
 
       {/* Tagline */}

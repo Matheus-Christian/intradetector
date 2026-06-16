@@ -86,6 +86,30 @@ export default function AdminPage() {
   const router = useRouter();
   const supabase = getSupabaseClient();
 
+  const [theme, setTheme] = useState<'light' | 'dark'>('dark');
+
+  useEffect(() => {
+    const savedTheme = localStorage.getItem('theme') as 'light' | 'dark' | null;
+    const initialTheme = savedTheme || 'dark';
+    setTheme(initialTheme);
+    if (initialTheme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, []);
+
+  const toggleTheme = () => {
+    const newTheme = theme === 'light' ? 'dark' : 'light';
+    setTheme(newTheme);
+    localStorage.setItem('theme', newTheme);
+    if (newTheme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  };
+
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [services, setServices] = useState<Service[]>([]);
@@ -1523,7 +1547,7 @@ export default function AdminPage() {
 
   if (!isAuthenticated || isLoading) {
     return (
-      <div className="min-h-screen bg-black flex flex-col items-center justify-center gap-3">
+      <div className="min-h-screen bg-zinc-50 dark:bg-black text-zinc-950 dark:text-white flex flex-col items-center justify-center gap-3">
         <Loader2 className="h-10 w-10 animate-spin text-indigo-500" />
         <span className="text-zinc-500 text-sm font-medium">Validando credenciais e carregando dados...</span>
       </div>
@@ -1531,20 +1555,30 @@ export default function AdminPage() {
   }
 
   return (
-    <div className="min-h-screen bg-black text-white flex flex-col font-sans">
+    <div className="min-h-screen bg-zinc-50 dark:bg-black text-zinc-950 dark:text-white flex flex-col font-sans">
       {/* Background decoration */}
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-indigo-900/10 via-zinc-950/45 to-black pointer-events-none z-0" />
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-indigo-100/20 dark:from-indigo-900/10 via-zinc-100/10 dark:via-zinc-950/45 to-zinc-50 dark:to-black pointer-events-none z-0" />
 
       {/* HEADER */}
-      <header className="sticky top-0 z-50 border-b border-zinc-900 bg-zinc-950/80 backdrop-blur-md px-6 py-4 flex items-center justify-between">
+      <header className="sticky top-0 z-50 border-b border-zinc-200 dark:border-zinc-200 dark:border-zinc-900 bg-zinc-200/90 dark:bg-zinc-950/80 backdrop-blur-md px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <IntradetectorLogo size="lg" showTagline={true} />
-          <span className="text-xs bg-zinc-800 text-zinc-400 border border-zinc-700 px-2 py-0.5 rounded-full font-semibold mt-3.5">Admin</span>
+          <span className="text-xs bg-zinc-200 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-400 border border-zinc-300 dark:border-zinc-700 px-2 py-0.5 rounded-full font-semibold mt-3.5">Admin</span>
         </div>
 
         <div className="flex items-center gap-3">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={toggleTheme}
+            className="h-9 w-9 text-zinc-550 hover:text-black dark:text-zinc-400 dark:hover:text-white rounded-xl"
+            title="Alternar tema"
+          >
+            {theme === 'dark' ? <Icons.Sun className="h-4.5 w-4.5" /> : <Icons.Moon className="h-4.5 w-4.5" />}
+          </Button>
+
           <Link href="/">
-            <Button variant="outline" className="border-zinc-800 hover:bg-zinc-900 text-zinc-400 hover:text-white transition-all text-xs font-semibold gap-1.5 rounded-xl">
+            <Button variant="outline" className="border-zinc-350 dark:border-zinc-300 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-900 text-zinc-650 dark:text-zinc-400 hover:text-black dark:hover:text-white transition-all text-xs font-semibold gap-1.5 rounded-xl">
               <ArrowLeft className="h-4 w-4" />
               Ver Site Público
             </Button>
@@ -1553,21 +1587,21 @@ export default function AdminPage() {
           <Button
             onClick={loadData}
             variant="outline"
-            className="border-zinc-800 hover:bg-zinc-900 text-zinc-400 hover:text-white transition-all rounded-xl"
+            className="border-zinc-350 dark:border-zinc-300 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-900 text-zinc-650 dark:text-zinc-400 hover:text-black dark:hover:text-white transition-all rounded-xl"
             title="Recarregar dados"
           >
             <RefreshCw className="h-4 w-4" />
           </Button>
 
           {currentUserProfile && (
-            <span className="text-xs text-zinc-400 select-none mr-1 hidden md:inline">
-              Bem-vindo(a), <span className="font-semibold text-zinc-250">{userGreeting}</span>
+            <span className="text-xs text-zinc-500 dark:text-zinc-400 select-none mr-1 hidden md:inline">
+              Bem-vindo(a), <span className="font-semibold text-zinc-800 dark:text-zinc-250">{userGreeting}</span>
             </span>
           )}
 
           <Button
             onClick={handleLogout}
-            className="bg-red-950/30 hover:bg-red-900/40 text-red-400 border border-red-500/10 font-semibold gap-1.5 rounded-xl"
+            className="bg-red-50 dark:bg-red-950/30 hover:bg-red-100 dark:hover:bg-red-900/40 text-red-750 dark:text-red-400 border border-red-200 dark:border-red-500/10 font-semibold gap-1.5 rounded-xl"
           >
             <LogOut className="h-4 w-4" />
             Logout
@@ -1576,15 +1610,15 @@ export default function AdminPage() {
       </header>
 
       {/* TAB NAVIGATION */}
-      <div className="relative z-10 border-b border-zinc-900 bg-zinc-950/20 backdrop-blur-sm px-6 py-2 flex items-center justify-between gap-4">
+      <div className="relative z-10 border-b border-zinc-200 dark:border-zinc-200 dark:border-zinc-900 bg-zinc-200/20 dark:bg-zinc-950/20 backdrop-blur-sm px-6 py-2 flex items-center justify-between gap-4">
         <div className="flex gap-2">
           <Button
             onClick={() => setActiveTab('reports')}
             variant="ghost"
             className={`rounded-xl text-sm font-semibold transition-all gap-1.5 ${
               activeTab === 'reports'
-                ? 'bg-zinc-900 text-white border border-zinc-800'
-                : 'text-zinc-400 hover:text-white hover:bg-zinc-900/50'
+                ? 'bg-white dark:bg-zinc-900 text-zinc-950 dark:text-white border border-zinc-200 dark:border-zinc-300 dark:border-zinc-800'
+                : 'text-zinc-600 dark:text-zinc-400 hover:text-black dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-zinc-900/50'
             }`}
           >
             <ListTodo className="h-4 w-4" />
@@ -1595,8 +1629,8 @@ export default function AdminPage() {
             variant="ghost"
             className={`rounded-xl text-sm font-semibold transition-all gap-1.5 ${
               activeTab === 'analytics'
-                ? 'bg-zinc-900 text-white border border-zinc-800'
-                : 'text-zinc-400 hover:text-white hover:bg-zinc-900/50'
+                ? 'bg-white dark:bg-zinc-900 text-zinc-950 dark:text-white border border-zinc-200 dark:border-zinc-300 dark:border-zinc-800'
+                : 'text-zinc-600 dark:text-zinc-400 hover:text-black dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-zinc-900/50'
             }`}
           >
             <BarChart3 className="h-4 w-4" />
@@ -1607,8 +1641,8 @@ export default function AdminPage() {
             variant="ghost"
             className={`rounded-xl text-sm font-semibold transition-all gap-1.5 ${
               activeTab === 'settings'
-                ? 'bg-zinc-900 text-white border border-zinc-800'
-                : 'text-zinc-400 hover:text-white hover:bg-zinc-900/50'
+                ? 'bg-white dark:bg-zinc-900 text-zinc-950 dark:text-white border border-zinc-200 dark:border-zinc-300 dark:border-zinc-800'
+                : 'text-zinc-600 dark:text-zinc-400 hover:text-black dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-zinc-900/50'
             }`}
           >
             <Sliders className="h-4 w-4" />
@@ -1623,7 +1657,7 @@ export default function AdminPage() {
         
         {/* TAB 1: REPORTS TABLE */}
         {activeTab === 'reports' && (
-          <Card className="bg-zinc-950/60 border-zinc-900 text-white">
+          <Card className="bg-white dark:bg-zinc-950/60 border-zinc-200 dark:border-zinc-200 dark:border-zinc-900 text-zinc-950 dark:text-white">
             <CardHeader className="flex flex-row items-center justify-between">
               <div>
                 <CardTitle className="text-xl font-bold">Relatos Recebidos</CardTitle>
@@ -1636,17 +1670,17 @@ export default function AdminPage() {
                   Nenhum relato recebido até o momento.
                 </div>
               ) : (
-                <div className="overflow-x-auto rounded-lg border border-zinc-900">
-                  <Table className="bg-zinc-950/80">
-                    <TableHeader className="bg-zinc-900/50 border-zinc-850">
-                      <TableRow className="hover:bg-zinc-900/20">
-                        <TableHead className="text-zinc-400 font-semibold">Data</TableHead>
-                        <TableHead className="text-zinc-400 font-semibold">Serviço</TableHead>
+                <div className="overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-200 dark:border-zinc-900">
+                  <Table className="bg-white dark:bg-zinc-950/80">
+                    <TableHeader className="bg-zinc-50 dark:bg-zinc-900/50 border-zinc-200 dark:border-zinc-200 dark:border-zinc-850">
+                      <TableRow className="hover:bg-zinc-100/50 dark:hover:bg-zinc-900/20 border-b border-zinc-250 dark:border-zinc-200 dark:border-zinc-850">
+                        <TableHead className="text-zinc-550 dark:text-zinc-400 font-bold">Data</TableHead>
+                        <TableHead className="text-zinc-550 dark:text-zinc-400 font-bold">Serviço</TableHead>
                         {formSchema.map(f => (
-                          <TableHead key={f.id} className="text-zinc-400 font-semibold">{f.label}</TableHead>
+                          <TableHead key={f.id} className="text-zinc-550 dark:text-zinc-400 font-bold">{f.label}</TableHead>
                         ))}
-                        <TableHead className="text-zinc-400 font-semibold text-center">Resolvido?</TableHead>
-                        <TableHead className="text-zinc-400 font-semibold text-right">Ações</TableHead>
+                        <TableHead className="text-zinc-550 dark:text-zinc-400 font-bold text-center">Resolvido?</TableHead>
+                        <TableHead className="text-zinc-550 dark:text-zinc-400 font-bold text-right">Ações</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -1654,9 +1688,9 @@ export default function AdminPage() {
                         const dateFormatted = new Date(report.created_at).toLocaleString('pt-BR');
                         const svcName = report.services?.name || 'Serviço Excluído';
                         return (
-                          <TableRow key={report.id} className="hover:bg-zinc-900/30 border-zinc-900">
-                            <TableCell className="text-zinc-300 text-xs whitespace-nowrap">{dateFormatted}</TableCell>
-                            <TableCell className="font-bold text-white text-sm">
+                          <TableRow key={report.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-900/30 border-b border-zinc-200 dark:border-zinc-200 dark:border-zinc-900">
+                            <TableCell className="text-zinc-650 dark:text-zinc-300 text-xs whitespace-nowrap">{dateFormatted}</TableCell>
+                            <TableCell className="font-bold text-zinc-900 dark:text-white text-sm">
                               <div className="flex flex-col items-start gap-1">
                                 <span>{svcName}</span>
                                 {report.custom_fields?.active_alert && (
@@ -1673,16 +1707,16 @@ export default function AdminPage() {
                             {formSchema.map(f => {
                               const val = (report as any)[f.id] ?? report.custom_fields?.[f.id] ?? '-';
                               return (
-                                <TableCell key={f.id} className="text-zinc-300 text-xs max-w-[200px] truncate" title={val}>{val}</TableCell>
+                                <TableCell key={f.id} className="text-zinc-650 dark:text-zinc-300 text-xs max-w-[200px] truncate" title={val}>{val}</TableCell>
                               );
                             })}
                             <TableCell className="text-center">
                               {report.is_resolved ? (
-                                <Badge className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] mx-auto w-fit flex gap-1 items-center justify-center">
+                                <Badge className="bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20 text-[10px] mx-auto w-fit flex gap-1 items-center justify-center">
                                   <CheckCircle2 className="h-3 w-3" /> Sim
                                 </Badge>
                               ) : (
-                                <Badge className="bg-red-500/10 text-red-400 border border-red-500/20 text-[10px] mx-auto w-fit flex gap-1 items-center justify-center">
+                                <Badge className="bg-red-50 text-red-700 border border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20 text-[10px] mx-auto w-fit flex gap-1 items-center justify-center">
                                   <XCircle className="h-3 w-3" /> Não
                                 </Badge>
                               )}
@@ -1692,7 +1726,7 @@ export default function AdminPage() {
                                 onClick={() => handleDeleteReport(report.id)}
                                 variant="ghost"
                                 size="icon"
-                                className="h-8 w-8 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg"
+                                className="h-8 w-8 text-red-600 hover:text-red-750 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-500/10 rounded-lg"
                                 title="Excluir relato"
                               >
                                 <Trash2 className="h-4 w-4" />
@@ -1717,8 +1751,8 @@ export default function AdminPage() {
               <div 
                 onMouseEnter={() => setIsSidebarHovered(true)}
                 onMouseLeave={() => setIsSidebarHovered(false)}
-                className={`flex flex-col gap-1.5 bg-zinc-950/70 p-3 rounded-2xl border border-zinc-900 transition-all duration-300 ease-in-out backdrop-blur-md
-                  ${(isSidebarOpen || isSidebarHovered) ? 'w-64 shadow-2xl border-zinc-800' : 'w-[76px]'}
+                className={`flex flex-col gap-1.5 bg-white dark:bg-zinc-950/70 p-3 rounded-2xl border border-zinc-200 dark:border-zinc-200 dark:border-zinc-900 transition-all duration-300 ease-in-out backdrop-blur-md
+                  ${(isSidebarOpen || isSidebarHovered) ? 'w-64 shadow-2xl border-zinc-200 dark:border-zinc-300 dark:border-zinc-800' : 'w-[76px]'}
                 `}
               >
                 {/* Cabeçalho do Menu */}
@@ -1732,7 +1766,7 @@ export default function AdminPage() {
                     onClick={() => setIsSidebarOpen(prev => !prev)}
                     variant="ghost"
                     size="icon"
-                    className="h-8 w-8 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-900/50 shrink-0"
+                    className="h-8 w-8 rounded-lg text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:text-white dark:hover:bg-zinc-900/50 shrink-0"
                     title={isSidebarOpen ? "Recolher menu" : "Fixar menu"}
                   >
                     <Menu className="h-4.5 w-4.5" />
@@ -1751,7 +1785,7 @@ export default function AdminPage() {
                   } ${
                     analyticsSubTab === 'alerts'
                       ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/10'
-                      : 'text-zinc-400 hover:text-white hover:bg-zinc-900/50'
+                      : 'text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:text-white dark:hover:bg-zinc-900/50'
                   }`}
                   title="Análise por Alertas"
                 >
@@ -1769,7 +1803,7 @@ export default function AdminPage() {
                   } ${
                     analyticsSubTab === 'custom'
                       ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/10'
-                      : 'text-zinc-400 hover:text-white hover:bg-zinc-900/50'
+                      : 'text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:text-white dark:hover:bg-zinc-900/50'
                   }`}
                   title="Análise personalizada"
                 >
@@ -1783,7 +1817,7 @@ export default function AdminPage() {
 
             {/* Mobile Sidebar (stacks or collapses) */}
             <div className="w-full lg:hidden block mb-4">
-              <div className="bg-zinc-950/70 p-3 rounded-2xl border border-zinc-900 flex flex-col gap-1.5 w-full">
+              <div className="bg-white dark:bg-zinc-950/70 p-3 rounded-2xl border border-zinc-200 dark:border-zinc-200 dark:border-zinc-900 flex flex-col gap-1.5 w-full">
                 <div className="flex items-center justify-between px-2 mb-2">
                   <span className="text-[10px] uppercase font-bold tracking-widest text-zinc-500">
                     Menu de Análise
@@ -1792,7 +1826,7 @@ export default function AdminPage() {
                     onClick={() => setIsSidebarOpen(prev => !prev)}
                     variant="ghost"
                     size="icon"
-                    className="h-8 w-8 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-900/50 shrink-0"
+                    className="h-8 w-8 rounded-lg text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:text-white dark:hover:bg-zinc-900/50 shrink-0"
                     title={isSidebarOpen ? "Recolher menu" : "Expandir menu"}
                   >
                     <Menu className="h-4.5 w-4.5" />
@@ -1809,7 +1843,7 @@ export default function AdminPage() {
                       className={`w-full justify-start rounded-xl text-xs font-semibold gap-3 py-5 px-4 transition-all duration-200 flex items-center ${
                         analyticsSubTab === 'alerts'
                           ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/10'
-                          : 'text-zinc-400 hover:text-white hover:bg-zinc-900/50'
+                          : 'text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:text-white dark:hover:bg-zinc-900/50'
                       }`}
                     >
                       <Activity className="h-4 w-4 shrink-0" />
@@ -1821,7 +1855,7 @@ export default function AdminPage() {
                       className={`w-full justify-start rounded-xl text-xs font-semibold gap-3 py-5 px-4 transition-all duration-200 flex items-center ${
                         analyticsSubTab === 'custom'
                           ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/10'
-                          : 'text-zinc-400 hover:text-white hover:bg-zinc-900/50'
+                          : 'text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:text-white dark:hover:bg-zinc-900/50'
                       }`}
                     >
                       <Sliders className="h-4 w-4 shrink-0" />
@@ -1837,21 +1871,21 @@ export default function AdminPage() {
               {analyticsSubTab === 'custom' ? (
                 <div className="space-y-6 animate-in fade-in-50 duration-300">
                   {/* INTERACTIVE FILTER BAR */}
-                  <Card className="bg-zinc-950/60 border-zinc-900 text-white">
-                    <CardHeader className="py-4 border-b border-zinc-900 flex flex-row items-center gap-2">
+                  <Card className="bg-white dark:bg-zinc-950/60 border-zinc-200 dark:border-zinc-200 dark:border-zinc-900 text-zinc-950 dark:text-white">
+                    <CardHeader className="py-4 border-b border-zinc-200 dark:border-zinc-200 dark:border-zinc-900 flex flex-row items-center gap-2">
                       <Filter className="h-4 w-4 text-indigo-400" />
-                      <CardTitle className="text-sm font-bold uppercase tracking-wider text-zinc-300">Filtros Analíticos</CardTitle>
+                      <CardTitle className="text-sm font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300">Filtros Analíticos</CardTitle>
                     </CardHeader>
                     <CardContent className="p-4 space-y-4">
                       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4">
                         {/* Filter: Service */}
                         <div className="space-y-1.5">
-                          <Label className="text-xs text-zinc-400 font-semibold">Serviço</Label>
+                          <Label className="text-xs text-zinc-650 dark:text-zinc-400 font-semibold">Serviço</Label>
                           <Select value={filterService} onValueChange={(val) => setFilterService(val || 'all')}>
-                            <SelectTrigger className="bg-zinc-900 border-zinc-800 text-xs h-9">
+                            <SelectTrigger className="bg-white dark:bg-zinc-900 border-zinc-300 dark:border-zinc-300 dark:border-zinc-800 text-zinc-950 dark:text-white text-xs h-9">
                               <SelectValue placeholder="Selecione" />
                             </SelectTrigger>
-                            <SelectContent className="bg-zinc-900 border-zinc-800 text-white">
+                            <SelectContent className="bg-white dark:bg-zinc-900 border-zinc-250 dark:border-zinc-300 dark:border-zinc-800 text-zinc-950 dark:text-white">
                               <SelectItem value="all">Todos os Serviços</SelectItem>
                               {services.map((s) => (
                                 <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
@@ -1863,15 +1897,15 @@ export default function AdminPage() {
                         {/* Dynamic Filters from Schema */}
                         {formSchema.filter(f => f.type === 'select').slice(0, 3).map(field => (
                           <div key={field.id} className="space-y-1.5">
-                            <Label className="text-xs text-zinc-400 font-semibold">{field.label}</Label>
+                            <Label className="text-xs text-zinc-650 dark:text-zinc-400 font-semibold">{field.label}</Label>
                             <Select 
                               value={dynamicFilters[field.id] || 'all'} 
                               onValueChange={(val) => setDynamicFilters(prev => ({ ...prev, [field.id]: val || 'all' }))}
                             >
-                              <SelectTrigger className="bg-zinc-900 border-zinc-800 text-xs h-9">
+                              <SelectTrigger className="bg-white dark:bg-zinc-900 border-zinc-300 dark:border-zinc-300 dark:border-zinc-800 text-zinc-950 dark:text-white text-xs h-9">
                                 <SelectValue placeholder="Selecione" />
                               </SelectTrigger>
-                              <SelectContent className="bg-zinc-900 border-zinc-800 text-white">
+                              <SelectContent className="bg-white dark:bg-zinc-900 border-zinc-250 dark:border-zinc-300 dark:border-zinc-800 text-zinc-950 dark:text-white">
                                 <SelectItem value="all">Todas as opções</SelectItem>
                                 {field.options?.map((opt) => (
                                   <SelectItem key={opt} value={opt}>{opt}</SelectItem>
@@ -1883,12 +1917,12 @@ export default function AdminPage() {
 
                         {/* Filter: Time Range */}
                         <div className="space-y-1.5">
-                          <Label className="text-xs text-zinc-400 font-semibold">Período</Label>
+                          <Label className="text-xs text-zinc-650 dark:text-zinc-400 font-semibold">Período</Label>
                           <Select value={filterTimeRange} onValueChange={(val) => setFilterTimeRange(val || '24h')}>
-                            <SelectTrigger className="bg-zinc-900 border-zinc-800 text-xs h-9">
+                            <SelectTrigger className="bg-white dark:bg-zinc-900 border-zinc-300 dark:border-zinc-300 dark:border-zinc-800 text-zinc-950 dark:text-white text-xs h-9">
                               <SelectValue placeholder="Selecione" />
                             </SelectTrigger>
-                            <SelectContent className="bg-zinc-900 border-zinc-800 text-white">
+                            <SelectContent className="bg-white dark:bg-zinc-900 border-zinc-250 dark:border-zinc-300 dark:border-zinc-800 text-zinc-950 dark:text-white">
                               <SelectItem value="24h">Últimas 24 Horas</SelectItem>
                               <SelectItem value="7d">Últimos 7 Dias</SelectItem>
                               <SelectItem value="30d">Últimos 30 Dias</SelectItem>
@@ -1901,23 +1935,23 @@ export default function AdminPage() {
 
                       {/* Conditional Custom Date/Time Selectors */}
                       {filterTimeRange === 'custom' && (
-                        <div className="flex flex-col sm:flex-row gap-4 pt-4 border-t border-zinc-900/60 animate-in fade-in-50 duration-200">
+                        <div className="flex flex-col sm:flex-row gap-4 pt-4 border-t border-zinc-200 dark:border-zinc-200 dark:border-zinc-200 dark:border-zinc-900/60 animate-in fade-in-50 duration-200">
                           <div className="space-y-1.5 flex-1">
-                            <Label className="text-xs text-zinc-400 font-semibold">Data e Hora Inicial (De)</Label>
+                            <Label className="text-xs text-zinc-650 dark:text-zinc-400 font-semibold">Data e Hora Inicial (De)</Label>
                             <Input
                               type="datetime-local"
                               value={customStartDate}
                               onChange={(e) => setCustomStartDate(e.target.value)}
-                              className="bg-zinc-900 border-zinc-800 text-white text-xs h-9 focus:border-indigo-500"
+                              className="bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-300 dark:border-zinc-800 text-zinc-950 dark:text-white text-xs h-9 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 rounded-md px-3"
                             />
                           </div>
                           <div className="space-y-1.5 flex-1">
-                            <Label className="text-xs text-zinc-400 font-semibold">Data e Hora Final (Até)</Label>
+                            <Label className="text-xs text-zinc-650 dark:text-zinc-400 font-semibold">Data e Hora Final (Até)</Label>
                             <Input
                               type="datetime-local"
                               value={customEndDate}
                               onChange={(e) => setCustomEndDate(e.target.value)}
-                              className="bg-zinc-900 border-zinc-800 text-white text-xs h-9 focus:border-indigo-500"
+                              className="bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-300 dark:border-zinc-800 text-zinc-950 dark:text-white text-xs h-9 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 rounded-md px-3"
                             />
                           </div>
                         </div>
@@ -1928,42 +1962,42 @@ export default function AdminPage() {
                   {/* GENERAL METRICS ROW */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 animate-in fade-in-50 duration-200">
                     {/* Metric 1 */}
-                    <Card className="bg-zinc-950/60 border-zinc-900 p-5 flex flex-col justify-between">
-                      <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">Total de Relatos</span>
-                      <span className="text-3xl font-extrabold text-white mt-2">{reportsInTimeRange.length}</span>
-                      <span className="text-[10px] text-zinc-400 mt-1">no período selecionado</span>
+                    <Card className="bg-white dark:bg-zinc-950/60 border-zinc-200 dark:border-zinc-200 dark:border-zinc-900 p-5 flex flex-col justify-between shadow-sm dark:shadow-none">
+                      <span className="text-[10px] text-zinc-450 dark:text-zinc-500 font-bold uppercase tracking-wider">Total de Relatos</span>
+                      <span className="text-3xl font-extrabold text-zinc-950 dark:text-white mt-2">{reportsInTimeRange.length}</span>
+                      <span className="text-[10px] text-zinc-550 dark:text-zinc-400 mt-1">no período selecionado</span>
                     </Card>
                     {/* Metric 2 */}
-                    <Card className="bg-zinc-950/60 border-zinc-900 p-5 flex flex-col justify-between">
-                      <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">Relatos Filtrados</span>
+                    <Card className="bg-white dark:bg-zinc-950/60 border-zinc-200 dark:border-zinc-200 dark:border-zinc-900 p-5 flex flex-col justify-between shadow-sm dark:shadow-none">
+                      <span className="text-[10px] text-zinc-450 dark:text-zinc-500 font-bold uppercase tracking-wider">Relatos Filtrados</span>
                       <span className="text-3xl font-extrabold text-indigo-400 mt-2">{filteredReports.length}</span>
-                      <span className="text-[10px] text-zinc-400 mt-1">com filtros aplicados</span>
+                      <span className="text-[10px] text-zinc-550 dark:text-zinc-400 mt-1">com filtros aplicados</span>
                     </Card>
                     {/* Metric 3 */}
-                    <Card className="bg-zinc-950/60 border-zinc-900 p-5 flex flex-col justify-between">
-                      <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">Serviços Afetados</span>
+                    <Card className="bg-white dark:bg-zinc-950/60 border-zinc-200 dark:border-zinc-200 dark:border-zinc-900 p-5 flex flex-col justify-between shadow-sm dark:shadow-none">
+                      <span className="text-[10px] text-zinc-450 dark:text-zinc-500 font-bold uppercase tracking-wider">Serviços Afetados</span>
                       <span className="text-3xl font-extrabold text-amber-500 mt-2">
                         {new Set(filteredReports.map(r => r.service_id)).size}
                       </span>
-                      <span className="text-[10px] text-zinc-400 mt-1">plataformas impactadas</span>
+                      <span className="text-[10px] text-zinc-550 dark:text-zinc-400 mt-1">plataformas impactadas</span>
                     </Card>
                     {/* Metric 4 */}
-                    <Card className="bg-zinc-950/60 border-zinc-900 p-5 flex flex-col justify-between">
-                      <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">Eficácia de Reboot</span>
+                    <Card className="bg-white dark:bg-zinc-950/60 border-zinc-200 dark:border-zinc-200 dark:border-zinc-900 p-5 flex flex-col justify-between shadow-sm dark:shadow-none">
+                      <span className="text-[10px] text-zinc-450 dark:text-zinc-500 font-bold uppercase tracking-wider">Eficácia de Reboot</span>
                       <span className="text-3xl font-extrabold text-emerald-500 mt-2">
                         {filteredReports.length > 0 
                           ? `${Math.round((filteredReports.filter(r => r.is_resolved).length / filteredReports.length) * 100)}%`
                           : '0%'
                         }
                       </span>
-                      <span className="text-[10px] text-zinc-400 mt-1">resolvidos pós reboot</span>
+                      <span className="text-[10px] text-zinc-550 dark:text-zinc-400 mt-1">resolvidos pós reboot</span>
                     </Card>
                   </div>
 
                   {/* CHARTS CONTAINER */}
                   <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     {/* Primary Dynamic Graph (Bar, Line, Area) */}
-                    <Card className="bg-zinc-950/60 border-zinc-900 text-white lg:col-span-2">
+                    <Card className="bg-white dark:bg-zinc-950/60 border-zinc-200 dark:border-zinc-200 dark:border-zinc-900 text-zinc-950 dark:text-white lg:col-span-2">
                       <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2">
                         <div>
                           <CardTitle className="text-lg font-bold">Volume de Instabilidade</CardTitle>
@@ -1972,12 +2006,12 @@ export default function AdminPage() {
                           </CardDescription>
                         </div>
                         {/* CHART TOGGLE BUTTONS */}
-                        <div className="flex bg-zinc-900 p-1 rounded-xl border border-zinc-800">
+                        <div className="flex bg-zinc-100 dark:bg-zinc-900 p-1 rounded-xl border border-zinc-200 dark:border-zinc-300 dark:border-zinc-800">
                           <Button
                             onClick={() => setChartType('bar')}
                             variant="ghost"
                             className={`h-8 px-3 rounded-lg text-xs font-semibold ${
-                              chartType === 'bar' ? 'bg-indigo-600 text-white' : 'text-zinc-400 hover:text-white'
+                              chartType === 'bar' ? 'bg-indigo-600 text-white shadow-sm' : 'text-zinc-550 dark:text-zinc-400 hover:text-zinc-850 dark:hover:text-white'
                             }`}
                           >
                             Barras
@@ -1986,7 +2020,7 @@ export default function AdminPage() {
                             onClick={() => setChartType('line')}
                             variant="ghost"
                             className={`h-8 px-3 rounded-lg text-xs font-semibold ${
-                              chartType === 'line' ? 'bg-indigo-600 text-white' : 'text-zinc-400 hover:text-white'
+                              chartType === 'line' ? 'bg-indigo-600 text-white shadow-sm' : 'text-zinc-550 dark:text-zinc-400 hover:text-zinc-850 dark:hover:text-white'
                             }`}
                           >
                             Linha
@@ -1995,7 +2029,7 @@ export default function AdminPage() {
                             onClick={() => setChartType('area')}
                             variant="ghost"
                             className={`h-8 px-3 rounded-lg text-xs font-semibold ${
-                              chartType === 'area' ? 'bg-indigo-600 text-white' : 'text-zinc-400 hover:text-white'
+                              chartType === 'area' ? 'bg-indigo-600 text-white shadow-sm' : 'text-zinc-550 dark:text-zinc-400 hover:text-zinc-850 dark:hover:text-white'
                             }`}
                           >
                             Área
@@ -2054,7 +2088,7 @@ export default function AdminPage() {
                     </Card>
 
                     {/* Resolved vs Unresolved Proportion */}
-                    <Card className="bg-zinc-950/60 border-zinc-900 text-white">
+                    <Card className="bg-white dark:bg-zinc-950/60 border-zinc-200 dark:border-zinc-200 dark:border-zinc-900 text-zinc-950 dark:text-white">
                       <CardHeader>
                         <CardTitle className="text-lg font-bold">Reboot Eficácia</CardTitle>
                         <CardDescription className="text-zinc-500">Relatos resolvidos ou não pós reboot no escopo filtrado.</CardDescription>
@@ -2099,7 +2133,7 @@ export default function AdminPage() {
                   </div>
 
                   {/* LIST OF FILTERED REPORTS */}
-                  <Card className="bg-zinc-950/60 border-zinc-900 text-white mt-6">
+                  <Card className="bg-white dark:bg-zinc-950/60 border-zinc-200 dark:border-zinc-200 dark:border-zinc-900 text-zinc-950 dark:text-white mt-6">
                     <CardHeader className="flex flex-row items-center justify-between">
                       <div>
                         <CardTitle className="text-lg font-bold">Relatos Filtrados</CardTitle>
@@ -2114,17 +2148,17 @@ export default function AdminPage() {
                           Nenhum relato atende aos filtros selecionados.
                         </div>
                       ) : (
-                        <div className="overflow-x-auto rounded-lg border border-zinc-900">
-                          <Table className="bg-zinc-950/80">
-                            <TableHeader className="bg-zinc-900/50 border-zinc-850">
-                              <TableRow className="hover:bg-zinc-900/20">
-                                <TableHead className="text-zinc-400 font-semibold">Data</TableHead>
-                                <TableHead className="text-zinc-400 font-semibold">Serviço</TableHead>
+                        <div className="overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-200 dark:border-zinc-900">
+                          <Table className="bg-white dark:bg-zinc-950/80">
+                            <TableHeader className="bg-zinc-50 dark:bg-zinc-900/50 border-zinc-200 dark:border-zinc-200 dark:border-zinc-850">
+                              <TableRow className="hover:bg-zinc-100/50 dark:hover:bg-zinc-900/20 border-b border-zinc-250 dark:border-zinc-200 dark:border-zinc-850">
+                                <TableHead className="text-zinc-550 dark:text-zinc-400 font-bold">Data</TableHead>
+                                <TableHead className="text-zinc-550 dark:text-zinc-400 font-bold">Serviço</TableHead>
                                 {formSchema.map(f => (
-                                  <TableHead key={f.id} className="text-zinc-400 font-semibold">{f.label}</TableHead>
+                                  <TableHead key={f.id} className="text-zinc-550 dark:text-zinc-400 font-bold">{f.label}</TableHead>
                                 ))}
-                                <TableHead className="text-zinc-400 font-semibold text-center">Resolvido?</TableHead>
-                                <TableHead className="text-zinc-400 font-semibold text-right">Ações</TableHead>
+                                <TableHead className="text-zinc-550 dark:text-zinc-400 font-bold text-center">Resolvido?</TableHead>
+                                <TableHead className="text-zinc-550 dark:text-zinc-400 font-bold text-right">Ações</TableHead>
                               </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -2132,9 +2166,9 @@ export default function AdminPage() {
                                 const dateFormatted = new Date(report.created_at).toLocaleString('pt-BR');
                                 const svcName = report.services?.name || services.find(s => s.id === report.service_id)?.name || 'Serviço Excluído';
                                 return (
-                                  <TableRow key={report.id} className="hover:bg-zinc-900/30 border-zinc-900">
-                                    <TableCell className="text-zinc-300 text-xs whitespace-nowrap">{dateFormatted}</TableCell>
-                                    <TableCell className="font-bold text-white text-sm">
+                                  <TableRow key={report.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-900/30 border-b border-zinc-200 dark:border-zinc-200 dark:border-zinc-900">
+                                    <TableCell className="text-zinc-650 dark:text-zinc-300 text-xs whitespace-nowrap">{dateFormatted}</TableCell>
+                                    <TableCell className="font-bold text-zinc-900 dark:text-white text-sm">
                                       <div className="flex flex-col items-start gap-1">
                                         <span>{svcName}</span>
                                         {report.custom_fields?.active_alert && (
@@ -2151,16 +2185,16 @@ export default function AdminPage() {
                                     {formSchema.map(f => {
                                       const val = (report as any)[f.id] ?? report.custom_fields?.[f.id] ?? '-';
                                       return (
-                                        <TableCell key={f.id} className="text-zinc-300 text-xs max-w-[200px] truncate" title={val}>{val}</TableCell>
+                                        <TableCell key={f.id} className="text-zinc-650 dark:text-zinc-300 text-xs max-w-[200px] truncate" title={val}>{val}</TableCell>
                                       );
                                     })}
                                     <TableCell className="text-center">
                                       {report.is_resolved ? (
-                                        <Badge className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] mx-auto w-fit flex gap-1 items-center justify-center">
+                                        <Badge className="bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20 text-[9px] mx-auto w-fit flex gap-1 items-center justify-center">
                                           <CheckCircle2 className="h-3 w-3" /> Sim
                                         </Badge>
                                       ) : (
-                                        <Badge className="bg-red-500/10 text-red-400 border border-red-500/20 text-[10px] mx-auto w-fit flex gap-1 items-center justify-center">
+                                        <Badge className="bg-red-50 text-red-700 border border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20 text-[9px] mx-auto w-fit flex gap-1 items-center justify-center">
                                           <XCircle className="h-3 w-3" /> Não
                                         </Badge>
                                       )}
@@ -2170,7 +2204,7 @@ export default function AdminPage() {
                                         onClick={() => handleDeleteReport(report.id)}
                                         variant="ghost"
                                         size="icon"
-                                        className="h-8 w-8 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg"
+                                        className="h-8 w-8 text-red-600 hover:text-red-750 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-500/10 rounded-lg"
                                         title="Excluir relato"
                                       >
                                         <Trash2 className="h-4 w-4" />
@@ -2190,8 +2224,8 @@ export default function AdminPage() {
                 <div className="space-y-6 animate-in fade-in-50 duration-300">
                   {!isAlertsReportGenerated ? (
                     /* ALERTS LIST VIEW (SELECTION) */
-                    <Card className="bg-zinc-950/60 border-zinc-900 text-white">
-                      <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-900 pb-5">
+                    <Card className="bg-white dark:bg-zinc-950/60 border-zinc-200 dark:border-zinc-200 dark:border-zinc-900 text-zinc-950 dark:text-white">
+                      <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-200 dark:border-zinc-900 pb-5">
                         <div>
                           <CardTitle className="text-xl font-bold">Análise por Alertas</CardTitle>
                           <CardDescription className="text-zinc-550 mt-1">
@@ -2219,10 +2253,10 @@ export default function AdminPage() {
                             Nenhum alerta de instabilidade registrado.
                           </div>
                         ) : (
-                          <div className="overflow-x-auto rounded-lg border border-zinc-900">
-                            <Table className="bg-zinc-950/80">
-                              <TableHeader className="bg-zinc-900/50 border-zinc-850">
-                                <TableRow className="hover:bg-zinc-900/20">
+                          <div className="overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-200 dark:border-zinc-900">
+                            <Table className="bg-white dark:bg-zinc-950/80">
+                              <TableHeader className="bg-zinc-50 dark:bg-zinc-900/50 border-zinc-200 dark:border-zinc-200 dark:border-zinc-850">
+                                <TableRow className="hover:bg-zinc-100/50 dark:hover:bg-zinc-900/20 border-b border-zinc-250 dark:border-zinc-200 dark:border-zinc-850">
                                   <TableHead className="w-12 text-center">
                                     <input
                                       type="checkbox"
@@ -2234,13 +2268,13 @@ export default function AdminPage() {
                                           setSelectedAlertIds([]);
                                         }
                                       }}
-                                      className="rounded border-zinc-800 bg-zinc-900 text-indigo-600 focus:ring-indigo-500 h-4 w-4 cursor-pointer"
+                                      className="rounded border-zinc-300 dark:border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-indigo-600 focus:ring-indigo-500 h-4 w-4 cursor-pointer"
                                     />
                                   </TableHead>
-                                  <TableHead className="text-zinc-400 font-semibold">Alerta</TableHead>
-                                  <TableHead className="text-zinc-400 font-semibold">Tipo</TableHead>
-                                  <TableHead className="text-zinc-400 font-semibold">Período de Vigência</TableHead>
-                                  <TableHead className="text-zinc-400 font-semibold text-center">Relatos</TableHead>
+                                  <TableHead className="text-zinc-550 dark:text-zinc-400 font-bold">Alerta</TableHead>
+                                  <TableHead className="text-zinc-550 dark:text-zinc-400 font-bold">Tipo</TableHead>
+                                  <TableHead className="text-zinc-550 dark:text-zinc-400 font-bold">Período de Vigência</TableHead>
+                                  <TableHead className="text-zinc-550 dark:text-zinc-400 font-bold text-center">Relatos</TableHead>
                                 </TableRow>
                               </TableHeader>
                               <TableBody>
@@ -2254,7 +2288,7 @@ export default function AdminPage() {
                                   return (
                                     <TableRow 
                                       key={alert.id} 
-                                      className={`hover:bg-zinc-900/30 border-zinc-900 transition-colors cursor-pointer ${
+                                      className={`hover:bg-zinc-900/30 border-zinc-200 dark:border-zinc-900 transition-colors cursor-pointer ${
                                         isSelected ? 'bg-indigo-900/5 hover:bg-indigo-900/10 border-l border-l-indigo-500' : ''
                                       }`}
                                       onClick={() => {
@@ -2276,19 +2310,19 @@ export default function AdminPage() {
                                                 : prev.filter(id => id !== alert.id)
                                             );
                                           }}
-                                          className="rounded border-zinc-800 bg-zinc-900 text-indigo-600 focus:ring-indigo-500 h-4 w-4 cursor-pointer"
+                                          className="rounded border-zinc-300 dark:border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-indigo-600 focus:ring-indigo-500 h-4 w-4 cursor-pointer"
                                         />
                                       </TableCell>
-                                      <TableCell className="font-bold text-white text-sm">
+                                      <TableCell className="font-bold text-zinc-900 dark:text-white text-sm">
                                         {alert.title}
                                         <div className="text-[10px] text-zinc-500 font-normal mt-0.5">Criado em: {createdDate}</div>
                                       </TableCell>
-                                      <TableCell className="text-zinc-300 text-xs">
-                                        <Badge variant="outline" className="border-indigo-500/30 text-indigo-400 text-[10px]">
+                                      <TableCell className="text-zinc-650 dark:text-zinc-300 text-xs">
+                                        <Badge className="bg-indigo-50 text-indigo-700 border border-indigo-200 dark:bg-indigo-500/10 dark:text-indigo-400 dark:border-indigo-500/20 text-[10px]">
                                           {alert.alert_type}
                                         </Badge>
                                       </TableCell>
-                                      <TableCell className="text-zinc-400 text-xs">
+                                      <TableCell className="text-zinc-600 dark:text-zinc-400 text-xs">
                                         <div className="flex flex-col gap-0.5">
                                           <div><span className="text-zinc-500 text-[10px]">Início:</span> {createdDate}</div>
                                           <div>
@@ -2304,7 +2338,7 @@ export default function AdminPage() {
                                         </div>
                                       </TableCell>
                                       <TableCell className="text-center">
-                                        <Badge className="bg-zinc-900 border border-zinc-850 text-zinc-300 text-xs px-2 py-0.5 rounded-full font-bold">
+                                        <Badge className="bg-zinc-900 border border-zinc-200 dark:border-zinc-850 text-zinc-300 text-xs px-2 py-0.5 rounded-full font-bold">
                                           {count} relatos
                                         </Badge>
                                       </TableCell>
@@ -2325,20 +2359,20 @@ export default function AdminPage() {
                           <Button 
                             onClick={() => setIsAlertsReportGenerated(false)}
                             variant="outline"
-                            className="border-zinc-800 hover:bg-zinc-900 text-zinc-400 hover:text-white rounded-xl text-xs gap-1.5 h-9 animate-in slide-in-from-left duration-200"
+                            className="border-zinc-300 dark:border-zinc-300 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-900 text-zinc-600 dark:text-zinc-400 hover:text-black dark:hover:text-white rounded-xl text-xs gap-1.5 h-9 animate-in slide-in-from-left duration-200"
                           >
                             <ArrowLeft className="h-4 w-4" />
                             Voltar para Seleção
                           </Button>
                           <div>
-                            <h2 className="text-xl font-bold text-white">Relatório Analítico por Alertas</h2>
+                            <h2 className="text-xl font-bold text-zinc-950 dark:text-white">Relatório Analítico por Alertas</h2>
                             <p className="text-xs text-zinc-500">Métricas consolidadas do(s) alarme(s) selecionado(s).</p>
                           </div>
                         </div>
                       </div>
 
                       {/* SELECTED ALERTS LABELS */}
-                      <Card className="bg-zinc-950/45 border-zinc-900 p-4 flex flex-wrap gap-2 items-center">
+                      <Card className="bg-zinc-50 dark:bg-zinc-950/45 border-zinc-200 dark:border-zinc-200 dark:border-zinc-900 p-4 flex flex-wrap gap-2 items-center">
                         <span className="text-xs text-zinc-400 font-semibold mr-1">Escopo de Análise:</span>
                         {networkAlerts.filter(a => selectedAlertIds.includes(a.id)).map(alert => (
                           <Badge key={alert.id} className="bg-indigo-600/10 text-indigo-400 border border-indigo-500/25 px-2.5 py-0.5 text-xs font-semibold rounded-md">
@@ -2350,54 +2384,54 @@ export default function AdminPage() {
                       {/* GENERAL METRICS ROW */}
                       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
                         {/* Metric 1 */}
-                        <Card className="bg-zinc-950/60 border-zinc-900 p-5 flex flex-col justify-between">
-                          <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">Total de Relatos</span>
-                          <span className="text-3xl font-extrabold text-white mt-2">{reportsInSelectedAlerts.length}</span>
-                          <span className="text-[10px] text-zinc-400 mt-1">no escopo dos alarmes</span>
+                        <Card className="bg-white dark:bg-zinc-950/60 border-zinc-200 dark:border-zinc-200 dark:border-zinc-900 p-5 flex flex-col justify-between shadow-sm dark:shadow-none">
+                          <span className="text-[10px] text-zinc-450 dark:text-zinc-500 font-bold uppercase tracking-wider">Total de Relatos</span>
+                          <span className="text-3xl font-extrabold text-zinc-950 dark:text-white mt-2">{reportsInSelectedAlerts.length}</span>
+                          <span className="text-[10px] text-zinc-550 dark:text-zinc-400 mt-1">no escopo dos alarmes</span>
                         </Card>
                         {/* Metric 2 */}
-                        <Card className="bg-zinc-950/60 border-zinc-900 p-5 flex flex-col justify-between">
-                          <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">Relatos Filtrados</span>
+                        <Card className="bg-white dark:bg-zinc-950/60 border-zinc-200 dark:border-zinc-200 dark:border-zinc-900 p-5 flex flex-col justify-between shadow-sm dark:shadow-none">
+                          <span className="text-[10px] text-zinc-450 dark:text-zinc-500 font-bold uppercase tracking-wider">Relatos Filtrados</span>
                           <span className="text-3xl font-extrabold text-indigo-400 mt-2">{filteredReportsInReportView.length}</span>
-                          <span className="text-[10px] text-zinc-400 mt-1">com filtros aplicados</span>
+                          <span className="text-[10px] text-zinc-550 dark:text-zinc-400 mt-1">com filtros aplicados</span>
                         </Card>
                         {/* Metric 3 */}
-                        <Card className="bg-zinc-950/60 border-zinc-900 p-5 flex flex-col justify-between">
-                          <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">Serviços Afetados</span>
+                        <Card className="bg-white dark:bg-zinc-950/60 border-zinc-200 dark:border-zinc-200 dark:border-zinc-900 p-5 flex flex-col justify-between shadow-sm dark:shadow-none">
+                          <span className="text-[10px] text-zinc-450 dark:text-zinc-500 font-bold uppercase tracking-wider">Serviços Afetados</span>
                           <span className="text-3xl font-extrabold text-amber-500 mt-2">
                             {new Set(filteredReportsInReportView.map(r => r.service_id)).size}
                           </span>
-                          <span className="text-[10px] text-zinc-400 mt-1">plataformas impactadas</span>
+                          <span className="text-[10px] text-zinc-550 dark:text-zinc-400 mt-1">plataformas impactadas</span>
                         </Card>
                         {/* Metric 4 */}
-                        <Card className="bg-zinc-950/60 border-zinc-900 p-5 flex flex-col justify-between">
-                          <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">Eficácia de Reboot</span>
+                        <Card className="bg-white dark:bg-zinc-950/60 border-zinc-200 dark:border-zinc-200 dark:border-zinc-900 p-5 flex flex-col justify-between shadow-sm dark:shadow-none">
+                          <span className="text-[10px] text-zinc-450 dark:text-zinc-500 font-bold uppercase tracking-wider">Eficácia de Reboot</span>
                           <span className="text-3xl font-extrabold text-emerald-500 mt-2">
                             {filteredReportsInReportView.length > 0 
                               ? `${Math.round((filteredReportsInReportView.filter(r => r.is_resolved).length / filteredReportsInReportView.length) * 100)}%`
                               : '0%'
                             }
                           </span>
-                          <span className="text-[10px] text-zinc-400 mt-1">resolvidos pós reboot</span>
+                          <span className="text-[10px] text-zinc-550 dark:text-zinc-400 mt-1">resolvidos pós reboot</span>
                         </Card>
                       </div>
 
                       {/* INLINE DYNAMIC FILTERS BAR */}
-                      <Card className="bg-zinc-950/60 border-zinc-900 text-white">
-                        <CardHeader className="py-3.5 border-b border-zinc-900 flex flex-row items-center gap-2">
+                      <Card className="bg-white dark:bg-zinc-950/60 border-zinc-200 dark:border-zinc-200 dark:border-zinc-900 text-zinc-950 dark:text-white">
+                        <CardHeader className="py-3.5 border-b border-zinc-200 dark:border-zinc-200 dark:border-zinc-900 flex flex-row items-center gap-2">
                           <Filter className="h-4 w-4 text-indigo-400" />
-                          <CardTitle className="text-xs font-bold uppercase tracking-wider text-zinc-300">Filtros do Relatório</CardTitle>
+                          <CardTitle className="text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300">Filtros do Relatório</CardTitle>
                         </CardHeader>
                         <CardContent className="p-4">
                           <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
                             {/* Filter: Service */}
                             <div className="space-y-1">
-                              <Label className="text-[11px] text-zinc-400 font-semibold">Serviço</Label>
+                              <Label className="text-[11px] text-zinc-650 dark:text-zinc-400 font-semibold">Serviço</Label>
                               <Select value={reportFilterService} onValueChange={(val) => setReportFilterService(val || 'all')}>
-                                <SelectTrigger className="bg-zinc-900 border-zinc-800 text-xs h-9">
+                                <SelectTrigger className="bg-white dark:bg-zinc-900 border-zinc-300 dark:border-zinc-300 dark:border-zinc-800 text-zinc-950 dark:text-white text-xs h-9">
                                   <SelectValue placeholder="Todos" />
                                 </SelectTrigger>
-                                <SelectContent className="bg-zinc-900 border-zinc-800 text-white">
+                                <SelectContent className="bg-white dark:bg-zinc-900 border-zinc-250 dark:border-zinc-300 dark:border-zinc-800 text-zinc-950 dark:text-white">
                                   <SelectItem value="all">Todos os Serviços</SelectItem>
                                   {services.map((s) => (
                                     <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
@@ -2408,12 +2442,12 @@ export default function AdminPage() {
 
                             {/* Filter: Issue Type */}
                             <div className="space-y-1">
-                              <Label className="text-[11px] text-zinc-400 font-semibold">Problema</Label>
+                              <Label className="text-[11px] text-zinc-650 dark:text-zinc-400 font-semibold">Problema</Label>
                               <Select value={reportFilterIssue} onValueChange={(val) => setReportFilterIssue(val || 'all')}>
-                                <SelectTrigger className="bg-zinc-900 border-zinc-800 text-xs h-9">
+                                <SelectTrigger className="bg-white dark:bg-zinc-900 border-zinc-300 dark:border-zinc-300 dark:border-zinc-800 text-zinc-950 dark:text-white text-xs h-9">
                                   <SelectValue placeholder="Todos" />
                                 </SelectTrigger>
-                                <SelectContent className="bg-zinc-900 border-zinc-800 text-white">
+                                <SelectContent className="bg-white dark:bg-zinc-900 border-zinc-250 dark:border-zinc-300 dark:border-zinc-800 text-zinc-950 dark:text-white">
                                   <SelectItem value="all">Todos os Problemas</SelectItem>
                                   {formSchema.find(f => f.id === 'issue_type')?.options?.map(opt => (
                                     <SelectItem key={opt} value={opt}>{opt}</SelectItem>
@@ -2424,12 +2458,12 @@ export default function AdminPage() {
 
                             {/* Filter: Region */}
                             <div className="space-y-1">
-                              <Label className="text-[11px] text-zinc-400 font-semibold">Região</Label>
+                              <Label className="text-[11px] text-zinc-650 dark:text-zinc-400 font-semibold">Região</Label>
                               <Select value={reportFilterRegion} onValueChange={(val) => setReportFilterRegion(val || 'all')}>
-                                <SelectTrigger className="bg-zinc-900 border-zinc-800 text-xs h-9">
+                                <SelectTrigger className="bg-white dark:bg-zinc-900 border-zinc-300 dark:border-zinc-300 dark:border-zinc-800 text-zinc-950 dark:text-white text-xs h-9">
                                   <SelectValue placeholder="Todas" />
                                 </SelectTrigger>
-                                <SelectContent className="bg-zinc-900 border-zinc-800 text-white">
+                                <SelectContent className="bg-white dark:bg-zinc-900 border-zinc-250 dark:border-zinc-300 dark:border-zinc-800 text-zinc-950 dark:text-white">
                                   <SelectItem value="all">Todas as Regiões</SelectItem>
                                   {formSchema.find(f => f.id === 'region')?.options?.map(opt => (
                                     <SelectItem key={opt} value={opt}>{opt}</SelectItem>
@@ -2440,12 +2474,12 @@ export default function AdminPage() {
 
                             {/* Filter: Connection Type */}
                             <div className="space-y-1">
-                              <Label className="text-[11px] text-zinc-400 font-semibold">Meio de Transmissão</Label>
+                              <Label className="text-[11px] text-zinc-650 dark:text-zinc-400 font-semibold">Meio de Transmissão</Label>
                               <Select value={reportFilterConnection} onValueChange={(val) => setReportFilterConnection(val || 'all')}>
-                                <SelectTrigger className="bg-zinc-900 border-zinc-800 text-xs h-9">
+                                <SelectTrigger className="bg-white dark:bg-zinc-900 border-zinc-300 dark:border-zinc-300 dark:border-zinc-800 text-zinc-950 dark:text-white text-xs h-9">
                                   <SelectValue placeholder="Todos" />
                                 </SelectTrigger>
-                                <SelectContent className="bg-zinc-900 border-zinc-800 text-white">
+                                <SelectContent className="bg-white dark:bg-zinc-900 border-zinc-250 dark:border-zinc-300 dark:border-zinc-800 text-zinc-950 dark:text-white">
                                   <SelectItem value="all">Todos os Meios</SelectItem>
                                   {formSchema.find(f => f.id === 'connection_type')?.options?.map(opt => (
                                     <SelectItem key={opt} value={opt}>{opt}</SelectItem>
@@ -2460,7 +2494,7 @@ export default function AdminPage() {
                       {/* MINI CHARTS CONTAINER */}
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         {/* Mini Chart 1: Services Distribution */}
-                        <Card className="bg-zinc-950/60 border-zinc-900 text-white">
+                        <Card className="bg-white dark:bg-zinc-950/60 border-zinc-200 dark:border-zinc-200 dark:border-zinc-900 text-zinc-950 dark:text-white">
                           <CardHeader className="pb-2">
                             <CardTitle className="text-sm font-bold text-zinc-300">Serviços Mais Impactados</CardTitle>
                           </CardHeader>
@@ -2483,7 +2517,7 @@ export default function AdminPage() {
                         </Card>
 
                         {/* Mini Chart 2: Issues Distribution */}
-                        <Card className="bg-zinc-950/60 border-zinc-900 text-white">
+                        <Card className="bg-white dark:bg-zinc-950/60 border-zinc-200 dark:border-zinc-200 dark:border-zinc-900 text-zinc-950 dark:text-white">
                           <CardHeader className="pb-2">
                             <CardTitle className="text-sm font-bold text-zinc-300">Principais Sintomas / Problemas</CardTitle>
                           </CardHeader>
@@ -2507,7 +2541,7 @@ export default function AdminPage() {
                       </div>
 
                       {/* DETAIL REPORT TABLE */}
-                      <Card className="bg-zinc-950/60 border-zinc-900 text-white">
+                      <Card className="bg-white dark:bg-zinc-950/60 border-zinc-200 dark:border-zinc-200 dark:border-zinc-900 text-zinc-950 dark:text-white">
                         <CardHeader>
                           <CardTitle className="text-base font-bold">Detalhamento dos Relatos no Escopo</CardTitle>
                           <CardDescription className="text-xs text-zinc-500 flex flex-col md:flex-row justify-between md:items-center gap-3">
@@ -2525,16 +2559,16 @@ export default function AdminPage() {
                               Nenhum relato encontrado para a combinação atual de filtros.
                             </div>
                           ) : (
-                            <div className="overflow-x-auto rounded-lg border border-zinc-900">
-                              <Table className="bg-zinc-950/80">
-                                <TableHeader className="bg-zinc-900/50 border-zinc-850">
-                                  <TableRow className="hover:bg-zinc-900/20">
-                                    <TableHead className="text-zinc-400 font-semibold text-xs">Data</TableHead>
-                                    <TableHead className="text-zinc-400 font-semibold text-xs">Serviço</TableHead>
+                            <div className="overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-200 dark:border-zinc-900">
+                              <Table className="bg-white dark:bg-zinc-950/80">
+                                <TableHeader className="bg-zinc-50 dark:bg-zinc-900/50 border-zinc-200 dark:border-zinc-200 dark:border-zinc-850">
+                                  <TableRow className="hover:bg-zinc-100/50 dark:hover:bg-zinc-900/20 border-b border-zinc-250 dark:border-zinc-200 dark:border-zinc-850">
+                                    <TableHead className="text-zinc-550 dark:text-zinc-400 font-bold text-xs">Data</TableHead>
+                                    <TableHead className="text-zinc-550 dark:text-zinc-400 font-bold text-xs">Serviço</TableHead>
                                     {formSchema.map(f => (
-                                      <TableHead key={f.id} className="text-zinc-400 font-semibold text-xs">{f.label}</TableHead>
+                                      <TableHead key={f.id} className="text-zinc-550 dark:text-zinc-400 font-bold text-xs">{f.label}</TableHead>
                                     ))}
-                                    <TableHead className="text-zinc-400 font-semibold text-xs text-center">Resolvido?</TableHead>
+                                    <TableHead className="text-zinc-550 dark:text-zinc-400 font-bold text-xs text-center">Resolvido?</TableHead>
                                   </TableRow>
                                 </TableHeader>
                                 <TableBody>
@@ -2556,9 +2590,9 @@ export default function AdminPage() {
                                     });
 
                                     return (
-                                      <TableRow key={report.id} className="hover:bg-zinc-900/30 border-zinc-900">
-                                        <TableCell className="text-zinc-300 text-[11px] whitespace-nowrap">{dateFormatted}</TableCell>
-                                        <TableCell className="font-bold text-white text-xs">
+                                      <TableRow key={report.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-900/30 border-b border-zinc-200 dark:border-zinc-200 dark:border-zinc-900">
+                                        <TableCell className="text-zinc-650 dark:text-zinc-300 text-[11px] whitespace-nowrap">{dateFormatted}</TableCell>
+                                        <TableCell className="font-bold text-zinc-900 dark:text-white text-xs">
                                           <div className="flex flex-col items-start gap-1">
                                             <span>{svcName}</span>
                                             {matchingAlerts.length > 0 && (
@@ -2575,16 +2609,16 @@ export default function AdminPage() {
                                         {formSchema.map(f => {
                                           const val = (report as any)[f.id] ?? report.custom_fields?.[f.id] ?? '-';
                                           return (
-                                            <TableCell key={f.id} className="text-zinc-300 text-[11px] max-w-[150px] truncate" title={val}>{val}</TableCell>
+                                            <TableCell key={f.id} className="text-zinc-650 dark:text-zinc-300 text-[11px] max-w-[150px] truncate" title={val}>{val}</TableCell>
                                           );
                                         })}
                                         <TableCell className="text-center">
                                           {report.is_resolved ? (
-                                            <Badge className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[9px] mx-auto w-fit flex gap-1 items-center justify-center">
+                                            <Badge className="bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20 text-[9px] mx-auto w-fit flex gap-1 items-center justify-center">
                                               <CheckCircle2 className="h-3 w-3" /> Sim
                                             </Badge>
                                           ) : (
-                                            <Badge className="bg-red-500/10 text-red-400 border border-red-500/20 text-[9px] mx-auto w-fit flex gap-1 items-center justify-center">
+                                            <Badge className="bg-red-50 text-red-700 border border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20 text-[9px] mx-auto w-fit flex gap-1 items-center justify-center">
                                               <XCircle className="h-3 w-3" /> Não
                                             </Badge>
                                           )}
@@ -2614,8 +2648,8 @@ export default function AdminPage() {
               <div 
                 onMouseEnter={() => setIsSidebarHovered(true)}
                 onMouseLeave={() => setIsSidebarHovered(false)}
-                className={`flex flex-col gap-1.5 bg-zinc-950/70 p-3 rounded-2xl border border-zinc-900 transition-all duration-300 ease-in-out backdrop-blur-md
-                  ${(isSidebarOpen || isSidebarHovered) ? 'w-64 shadow-2xl border-zinc-800' : 'w-[76px]'}
+                className={`flex flex-col gap-1.5 bg-white dark:bg-zinc-950/70 p-3 rounded-2xl border border-zinc-200 dark:border-zinc-200 dark:border-zinc-900 transition-all duration-300 ease-in-out backdrop-blur-md
+                  ${(isSidebarOpen || isSidebarHovered) ? 'w-64 shadow-2xl border-zinc-200 dark:border-zinc-300 dark:border-zinc-800' : 'w-[76px]'}
                 `}
               >
                 {/* Cabeçalho do Menu */}
@@ -2629,7 +2663,7 @@ export default function AdminPage() {
                     onClick={() => setIsSidebarOpen(prev => !prev)}
                     variant="ghost"
                     size="icon"
-                    className="h-8 w-8 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-900/50 shrink-0"
+                    className="h-8 w-8 rounded-lg text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:text-white dark:hover:bg-zinc-900/50 shrink-0"
                     title={isSidebarOpen ? "Recolher menu" : "Fixar menu"}
                   >
                     <Menu className="h-4.5 w-4.5" />
@@ -2646,7 +2680,7 @@ export default function AdminPage() {
                     } ${
                       settingsSubTab === 'cards'
                         ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/10'
-                        : 'text-zinc-400 hover:text-white hover:bg-zinc-900/50'
+                        : 'text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:text-white dark:hover:bg-zinc-900/50'
                     }`}
                     title="Gerenciamento de Cards"
                   >
@@ -2666,7 +2700,7 @@ export default function AdminPage() {
                     } ${
                       settingsSubTab === 'form'
                         ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/10'
-                        : 'text-zinc-400 hover:text-white hover:bg-zinc-900/50'
+                        : 'text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:text-white dark:hover:bg-zinc-900/50'
                     }`}
                     title="Construtor de Formulários"
                   >
@@ -2686,7 +2720,7 @@ export default function AdminPage() {
                     } ${
                       settingsSubTab === 'alerts'
                         ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/10'
-                        : 'text-zinc-400 hover:text-white hover:bg-zinc-900/50'
+                        : 'text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:text-white dark:hover:bg-zinc-900/50'
                     }`}
                     title="Gerenciar Alertas"
                   >
@@ -2706,7 +2740,7 @@ export default function AdminPage() {
                     } ${
                       settingsSubTab === 'logs'
                         ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/10'
-                        : 'text-zinc-400 hover:text-white hover:bg-zinc-900/50'
+                        : 'text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:text-white dark:hover:bg-zinc-900/50'
                     }`}
                     title="Logs de Auditoria"
                   >
@@ -2726,7 +2760,7 @@ export default function AdminPage() {
                     } ${
                       settingsSubTab === 'users'
                         ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/10'
-                        : 'text-zinc-400 hover:text-white hover:bg-zinc-900/50'
+                        : 'text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:text-white dark:hover:bg-zinc-900/50'
                     }`}
                     title="Gerenciamento de Usuários"
                   >
@@ -2741,7 +2775,7 @@ export default function AdminPage() {
 
             {/* Mobile Sidebar (stacks or collapses) */}
             <div className="w-full lg:hidden block mb-4">
-              <div className="bg-zinc-950/70 p-3 rounded-2xl border border-zinc-900 flex flex-col gap-1.5 w-full">
+              <div className="bg-white dark:bg-zinc-950/70 p-3 rounded-2xl border border-zinc-200 dark:border-zinc-200 dark:border-zinc-900 flex flex-col gap-1.5 w-full">
                 <div className="flex items-center justify-between px-2 mb-2">
                   <span className="text-[10px] uppercase font-bold tracking-widest text-zinc-500">
                     Configurações
@@ -2750,7 +2784,7 @@ export default function AdminPage() {
                     onClick={() => setIsSidebarOpen(prev => !prev)}
                     variant="ghost"
                     size="icon"
-                    className="h-8 w-8 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-900/50 shrink-0"
+                    className="h-8 w-8 rounded-lg text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:text-white dark:hover:bg-zinc-900/50 shrink-0"
                     title={isSidebarOpen ? "Recolher menu" : "Expandir menu"}
                   >
                     <Menu className="h-4.5 w-4.5" />
@@ -2765,7 +2799,7 @@ export default function AdminPage() {
                         className={`w-full justify-start rounded-xl text-xs font-semibold gap-3 py-5 px-4 transition-all duration-200 flex items-center ${
                           settingsSubTab === 'cards'
                             ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/10'
-                            : 'text-zinc-400 hover:text-white hover:bg-zinc-900/50'
+                            : 'text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:text-white dark:hover:bg-zinc-900/50'
                         }`}
                       >
                         <Layers className="h-4 w-4 shrink-0" />
@@ -2779,7 +2813,7 @@ export default function AdminPage() {
                         className={`w-full justify-start rounded-xl text-xs font-semibold gap-3 py-5 px-4 transition-all duration-200 flex items-center ${
                           settingsSubTab === 'form'
                             ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/10'
-                            : 'text-zinc-400 hover:text-white hover:bg-zinc-900/50'
+                            : 'text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:text-white dark:hover:bg-zinc-900/50'
                         }`}
                       >
                         <FormInput className="h-4 w-4 shrink-0" />
@@ -2793,7 +2827,7 @@ export default function AdminPage() {
                         className={`w-full justify-start rounded-xl text-xs font-semibold gap-3 py-5 px-4 transition-all duration-200 flex items-center ${
                           settingsSubTab === 'alerts'
                             ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/10'
-                            : 'text-zinc-400 hover:text-white hover:bg-zinc-900/50'
+                            : 'text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:text-white dark:hover:bg-zinc-900/50'
                         }`}
                       >
                         <AlertCircle className="h-4 w-4 shrink-0" />
@@ -2807,7 +2841,7 @@ export default function AdminPage() {
                         className={`w-full justify-start rounded-xl text-xs font-semibold gap-3 py-5 px-4 transition-all duration-200 flex items-center ${
                           settingsSubTab === 'logs'
                             ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/10'
-                            : 'text-zinc-400 hover:text-white hover:bg-zinc-900/50'
+                            : 'text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:text-white dark:hover:bg-zinc-900/50'
                         }`}
                       >
                         <Activity className="h-4 w-4 shrink-0" />
@@ -2821,7 +2855,7 @@ export default function AdminPage() {
                         className={`w-full justify-start rounded-xl text-xs font-semibold gap-3 py-5 px-4 transition-all duration-200 flex items-center ${
                           settingsSubTab === 'users'
                             ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/10'
-                            : 'text-zinc-400 hover:text-white hover:bg-zinc-900/50'
+                            : 'text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:text-white dark:hover:bg-zinc-900/50'
                         }`}
                       >
                         <Shield className="h-4 w-4 shrink-0" />
@@ -2836,8 +2870,8 @@ export default function AdminPage() {
             {/* CONTENT AREA */}
             <div className="flex-1 min-w-0 w-full space-y-6">
               {settingsSubTab === 'cards' && (
-                <Card className="bg-zinc-950/60 border-zinc-900 text-white">
-                  <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-900 pb-5">
+                <Card className="bg-white dark:bg-zinc-950/60 border-zinc-200 dark:border-zinc-200 dark:border-zinc-900 text-zinc-950 dark:text-white">
+                  <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-200 dark:border-zinc-900 pb-5">
                     <div>
                       <div className="flex flex-col sm:flex-row sm:items-center gap-3">
                         <CardTitle className="text-xl font-bold">Gerenciamento de Serviços (Cards)</CardTitle>
@@ -2856,7 +2890,7 @@ export default function AdminPage() {
                         <Button
                           onClick={handleOpenAddCategory}
                           variant="outline"
-                          className="border-zinc-800 hover:bg-zinc-900 text-zinc-300 hover:text-white font-semibold gap-1.5 rounded-xl text-xs py-2 px-4 transition-all"
+                          className="border-zinc-300 dark:border-zinc-300 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-900 text-zinc-650 dark:text-zinc-300 hover:text-black dark:hover:text-white font-semibold gap-1.5 rounded-xl text-xs py-2 px-4 transition-all"
                         >
                           <Sliders className="h-4 w-4 text-indigo-400" />
                           Gerenciar Categorias
@@ -2864,7 +2898,7 @@ export default function AdminPage() {
                         <Button
                           onClick={() => setIsPingConfigModalOpen(true)}
                           variant="outline"
-                          className="border-zinc-800 hover:bg-zinc-900 text-zinc-300 hover:text-white font-semibold gap-1.5 rounded-xl text-xs py-2 px-4 transition-all"
+                          className="border-zinc-300 dark:border-zinc-300 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-900 text-zinc-650 dark:text-zinc-300 hover:text-black dark:hover:text-white font-semibold gap-1.5 rounded-xl text-xs py-2 px-4 transition-all"
                         >
                           <Activity className="h-4 w-4 text-emerald-450" />
                           Configurar Ping
@@ -2888,19 +2922,19 @@ export default function AdminPage() {
                       <div className="space-y-4">
                         {/* SEARCH INPUT BAR */}
                         <div className="relative w-full max-w-sm">
-                          <Icons.Search className="absolute left-3 top-2.5 h-4 w-4 text-zinc-550" />
+                          <Icons.Search className="absolute left-3 top-2.5 h-4 w-4 text-zinc-400 dark:text-zinc-500" />
                           <Input
                             type="text"
                             placeholder="Buscar serviços por nome ou categoria..."
                             value={searchServicesQuery}
                             onChange={(e) => setSearchServicesQuery(e.target.value)}
-                            className="pl-9 bg-zinc-900/40 border-zinc-900 focus:border-zinc-800 text-zinc-200 placeholder-zinc-550 text-xs rounded-xl"
+                            className="pl-9 bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-800 text-zinc-950 dark:text-white placeholder-zinc-450 dark:placeholder-zinc-500 text-xs rounded-xl focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                           />
                           {searchServicesQuery && (
                             <button
                               type="button"
                               onClick={() => setSearchServicesQuery('')}
-                              className="absolute right-3 top-2.5 hover:text-white text-zinc-500 transition-colors"
+                              className="absolute right-3 top-2.5 text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors"
                               title="Limpar pesquisa"
                             >
                               <Icons.X className="h-4 w-4" />
@@ -2909,27 +2943,27 @@ export default function AdminPage() {
                         </div>
 
                         {filteredServices.length === 0 ? (
-                          <div className="text-center py-12 text-zinc-550 border border-zinc-900 rounded-xl bg-zinc-950/30 text-xs">
+                          <div className="text-center py-12 text-zinc-550 border border-zinc-200 dark:border-zinc-900 rounded-xl bg-zinc-950/30 text-xs">
                             Nenhum serviço correspondente encontrado para a pesquisa.
                           </div>
                         ) : (
-                          <div className="overflow-x-auto rounded-lg border border-zinc-900">
-                            <Table className="bg-zinc-950/80">
-                              <TableHeader className="bg-zinc-900/50 border-zinc-850">
-                                <TableRow className="hover:bg-zinc-900/20">
-                                  <TableHead className="text-zinc-400 font-semibold">Nome</TableHead>
-                                  <TableHead className="text-zinc-400 font-semibold">Categoria</TableHead>
-                                  <TableHead className="text-zinc-400 font-semibold">Ícone</TableHead>
+                          <div className="overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-200 dark:border-zinc-900">
+                            <Table className="bg-white dark:bg-zinc-950/80">
+                              <TableHeader className="bg-zinc-50 dark:bg-zinc-900/50 border-zinc-200 dark:border-zinc-200 dark:border-zinc-850">
+                                <TableRow className="hover:bg-zinc-100/50 dark:hover:bg-zinc-900/20 border-b border-zinc-250 dark:border-zinc-200 dark:border-zinc-850">
+                                  <TableHead className="text-zinc-550 dark:text-zinc-400 font-bold">Nome</TableHead>
+                                  <TableHead className="text-zinc-550 dark:text-zinc-400 font-bold">Categoria</TableHead>
+                                  <TableHead className="text-zinc-550 dark:text-zinc-400 font-bold">Ícone</TableHead>
                                   {hasWriteAccess('cards') && (
-                                    <TableHead className="text-zinc-400 font-semibold text-right">Ações</TableHead>
+                                    <TableHead className="text-zinc-550 dark:text-zinc-400 font-bold text-right">Ações</TableHead>
                                   )}
                                 </TableRow>
                               </TableHeader>
                               <TableBody>
                                 {filteredServices.map((service) => {
                                   return (
-                                    <TableRow key={service.id} className="hover:bg-zinc-900/30 border-zinc-900">
-                                      <TableCell className="font-bold text-white text-sm">
+                                    <TableRow key={service.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-900/30 border-b border-zinc-200 dark:border-zinc-200 dark:border-zinc-900">
+                                      <TableCell className="font-bold text-zinc-900 dark:text-white text-sm">
                                         <div className="flex flex-col items-start gap-1">
                                           <span>{service.name}</span>
                                           {service.ping_enabled && (
@@ -2939,7 +2973,7 @@ export default function AdminPage() {
                                           )}
                                         </div>
                                       </TableCell>
-                                      <TableCell className="text-zinc-300 text-xs">{service.category}</TableCell>
+                                      <TableCell className="text-zinc-650 dark:text-zinc-300 text-xs">{service.category}</TableCell>
                                       <TableCell className="text-zinc-400 text-xs font-mono">{service.icon_name || 'Globe'}</TableCell>
                                       {hasWriteAccess('cards') && (
                                         <TableCell className="text-right flex justify-end gap-1.5">
@@ -2947,7 +2981,7 @@ export default function AdminPage() {
                                             onClick={() => handleOpenEditService(service)}
                                             variant="ghost"
                                             size="icon"
-                                            className="h-8 w-8 text-indigo-400 hover:text-indigo-300 hover:bg-indigo-500/10 rounded-lg"
+                                            className="h-8 w-8 text-indigo-600 hover:text-indigo-750 hover:bg-indigo-50 dark:text-indigo-400 dark:hover:text-indigo-300 dark:hover:bg-indigo-500/10 rounded-lg"
                                             title="Editar Serviço"
                                           >
                                             <Edit2 className="h-3.5 w-3.5" />
@@ -2956,7 +2990,7 @@ export default function AdminPage() {
                                             onClick={() => handleDeleteService(service.id)}
                                             variant="ghost"
                                             size="icon"
-                                            className="h-8 w-8 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg"
+                                            className="h-8 w-8 text-red-600 hover:text-red-750 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-500/10 rounded-lg"
                                             title="Excluir Serviço"
                                           >
                                             <Trash2 className="h-3.5 w-3.5" />
@@ -2977,7 +3011,7 @@ export default function AdminPage() {
               )}
 
               {settingsSubTab === 'form' && (
-                <Card className="bg-zinc-950/60 border-zinc-900 text-white">
+                <Card className="bg-white dark:bg-zinc-950/60 border-zinc-200 dark:border-zinc-200 dark:border-zinc-900 text-zinc-950 dark:text-white">
                   <CardHeader>
                     <div className="flex flex-col sm:flex-row sm:items-center gap-3">
                       <CardTitle className="text-xl font-bold">Construtor de Formulário</CardTitle>
@@ -2997,10 +3031,10 @@ export default function AdminPage() {
                       <FormBuilder schema={formSchema} onChange={hasWriteAccess('form') ? setFormSchema : () => {}} />
 
                       {/* CONFIGURAÇÃO DE EXIBIÇÃO DE SERVIÇOS RELACIONADOS */}
-                      <div className="p-4 bg-zinc-900/35 border border-zinc-900 rounded-xl space-y-4 pt-4 mt-4">
+                      <div className="p-4 bg-zinc-50/50 dark:bg-zinc-900/35 border border-zinc-200 dark:border-zinc-900 rounded-xl space-y-4 pt-4 mt-4">
                         <div className="flex items-center justify-between">
                           <div className="space-y-1 pr-4">
-                            <Label htmlFor="showRelatedServices" className="text-sm font-semibold text-zinc-200 cursor-pointer">
+                            <Label htmlFor="showRelatedServices" className="text-sm font-semibold text-zinc-900 dark:text-zinc-200 cursor-pointer">
                               Permitir Relatos Correlacionados (Multisserviço)
                             </Label>
                             <p className="text-xs text-zinc-500">
@@ -3013,13 +3047,13 @@ export default function AdminPage() {
                             checked={showRelatedServices}
                             disabled={!hasWriteAccess('form')}
                             onChange={(e) => setShowRelatedServices(e.target.checked)}
-                            className="rounded border-zinc-800 bg-zinc-900 text-indigo-600 focus:ring-indigo-500 h-5 w-5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="rounded border-zinc-300 dark:border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-indigo-600 focus:ring-indigo-500 h-5 w-5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                           />
                         </div>
                       </div>
 
                       {hasWriteAccess('form') && (
-                        <div className="flex justify-end pt-4 border-t border-zinc-900">
+                        <div className="flex justify-end pt-4 border-t border-zinc-200 dark:border-zinc-200 dark:border-zinc-900">
                           <Button
                             type="submit"
                             className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-8 py-2.5 rounded-xl transition-all shadow-lg shadow-indigo-600/20"
@@ -3044,7 +3078,7 @@ export default function AdminPage() {
               {settingsSubTab === 'alerts' && (
                 <div className="space-y-6">
                   {/* REGRAS DE CRITICIDADE */}
-                  <Card className="bg-zinc-950/60 border-zinc-900 text-white">
+                  <Card className="bg-white dark:bg-zinc-950/60 border-zinc-200 dark:border-zinc-200 dark:border-zinc-900 text-zinc-950 dark:text-white">
                     <CardHeader>
                       <div className="flex flex-col sm:flex-row sm:items-center gap-3">
                         <CardTitle className="text-xl font-bold">Regras de Criticidade (Algoritmo Automático)</CardTitle>
@@ -3063,14 +3097,14 @@ export default function AdminPage() {
                         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                           {/* Window Minutes */}
                           <div className="space-y-2">
-                            <Label htmlFor="windowMinutes" className="text-zinc-300 font-semibold text-sm">Janela de Tempo (Minutos)</Label>
+                            <Label htmlFor="windowMinutes" className="text-zinc-700 dark:text-zinc-300 font-semibold text-sm">Janela de Tempo (Minutos)</Label>
                             <Input
                               id="windowMinutes"
                               type="number"
                               min={1}
                               value={thresholdWindow}
                               onChange={(e) => setThresholdWindow(Number(e.target.value))}
-                              className="bg-zinc-900 border-zinc-800 text-white focus:border-indigo-500"
+                              className="bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-300 dark:border-zinc-800 text-zinc-950 dark:text-white focus:border-indigo-500"
                               disabled={!hasWriteAccess('alerts')}
                               required
                             />
@@ -3079,14 +3113,14 @@ export default function AdminPage() {
 
                           {/* Warning Limit */}
                           <div className="space-y-2">
-                            <Label htmlFor="warningLimit" className="text-amber-400 font-semibold text-sm">Alerta: Instabilidade (🟡)</Label>
+                            <Label htmlFor="warningLimit" className="text-amber-700 dark:text-amber-400 font-semibold text-sm">Alerta: Instabilidade (🟡)</Label>
                             <Input
                               id="warningLimit"
                               type="number"
                               min={1}
                               value={thresholdWarning}
                               onChange={(e) => setThresholdWarning(Number(e.target.value))}
-                              className="bg-zinc-900 border-zinc-800 text-amber-400 focus:border-amber-500"
+                              className="bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-300 dark:border-zinc-800 text-amber-700 dark:text-amber-400 focus:border-amber-500"
                               disabled={!hasWriteAccess('alerts')}
                               required
                             />
@@ -3095,14 +3129,14 @@ export default function AdminPage() {
 
                           {/* Critical Limit */}
                           <div className="space-y-2">
-                            <Label htmlFor="criticalLimit" className="text-red-400 font-semibold text-sm">Crítico: Queda Total (🔴)</Label>
+                            <Label htmlFor="criticalLimit" className="text-red-650 dark:text-red-400 font-semibold text-sm">Crítico: Queda Total (🔴)</Label>
                             <Input
                               id="criticalLimit"
                               type="number"
                               min={2}
                               value={thresholdCritical}
                               onChange={(e) => setThresholdCritical(Number(e.target.value))}
-                              className="bg-zinc-900 border-zinc-800 text-red-450 focus:border-red-500"
+                              className="bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-300 dark:border-zinc-800 text-red-700 dark:text-red-400 focus:border-red-500"
                               disabled={!hasWriteAccess('alerts')}
                               required
                             />
@@ -3111,16 +3145,16 @@ export default function AdminPage() {
 
                           {/* Public Chart Window Limit */}
                           <div className="space-y-2">
-                            <Label htmlFor="chartWindowHours" className="text-indigo-400 font-semibold text-sm">Janela do Gráfico Público</Label>
+                            <Label htmlFor="chartWindowHours" className="text-indigo-650 dark:text-indigo-400 font-semibold text-sm">Janela do Gráfico Público</Label>
                             <Select 
                               value={String(chartWindowHours)} 
                               onValueChange={(val) => setChartWindowHours(Number(val || '24'))}
                               disabled={!hasWriteAccess('alerts')}
                             >
-                              <SelectTrigger id="chartWindowHours" className="bg-zinc-900 border-zinc-800 text-white focus:border-indigo-500">
+                              <SelectTrigger id="chartWindowHours" className="bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-300 dark:border-zinc-800 text-zinc-950 dark:text-white focus:border-indigo-500">
                                 <SelectValue placeholder="Selecione" />
                               </SelectTrigger>
-                              <SelectContent className="bg-zinc-900 border-zinc-800 text-white">
+                              <SelectContent className="bg-white dark:bg-zinc-900 border-zinc-250 dark:border-zinc-300 dark:border-zinc-800 text-zinc-950 dark:text-white">
                                 <SelectItem value="4">Últimas 4 Horas</SelectItem>
                                 <SelectItem value="12">Últimas 12 Horas</SelectItem>
                                 <SelectItem value="24">Últimas 24 Horas</SelectItem>
@@ -3130,21 +3164,21 @@ export default function AdminPage() {
                           </div>
                         </div>
 
-                        <div className="border-t border-zinc-900 pt-6 space-y-4">
-                          <h4 className="text-sm font-semibold text-zinc-350 flex items-center gap-1.5">
+                        <div className="border-t border-zinc-200 dark:border-zinc-200 dark:border-zinc-900 pt-6 space-y-4">
+                          <h4 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5">
                             <Sliders className="h-4 w-4 text-indigo-400" />
                             Nomes dos Status nos Cards Públicos
                           </h4>
                           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                             {/* Status Normal Label */}
                             <div className="space-y-2">
-                              <Label htmlFor="labelNormal" className="text-emerald-400 font-semibold text-sm">Status: Normal (🟢)</Label>
+                              <Label htmlFor="labelNormal" className="text-emerald-700 dark:text-emerald-400 font-semibold text-sm">Status: Normal (🟢)</Label>
                               <Input
                                 id="labelNormal"
                                 type="text"
                                 value={labelNormal}
                                 onChange={(e) => setLabelNormal(e.target.value)}
-                                className="bg-zinc-900 border-zinc-800 text-emerald-400 focus:border-emerald-550"
+                                className="bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-300 dark:border-zinc-800 text-emerald-700 dark:text-emerald-400 focus:border-emerald-550"
                                 placeholder="Ex: Operando"
                                 disabled={!hasWriteAccess('alerts')}
                                 required
@@ -3154,13 +3188,13 @@ export default function AdminPage() {
 
                             {/* Status Warning Label */}
                             <div className="space-y-2">
-                              <Label htmlFor="labelWarning" className="text-amber-400 font-semibold text-sm">Status: Instabilidade (🟡)</Label>
+                              <Label htmlFor="labelWarning" className="text-amber-700 dark:text-amber-400 font-semibold text-sm">Status: Instabilidade (🟡)</Label>
                               <Input
                                 id="labelWarning"
                                 type="text"
                                 value={labelWarning}
                                 onChange={(e) => setLabelWarning(e.target.value)}
-                                className="bg-zinc-900 border-zinc-800 text-amber-400 focus:border-amber-500"
+                                className="bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-300 dark:border-zinc-800 text-amber-700 dark:text-amber-400 focus:border-amber-500"
                                 placeholder="Ex: Instabilidade"
                                 disabled={!hasWriteAccess('alerts')}
                                 required
@@ -3170,13 +3204,13 @@ export default function AdminPage() {
 
                             {/* Status Critical Label */}
                             <div className="space-y-2">
-                              <Label htmlFor="labelCritical" className="text-red-400 font-semibold text-sm">Status: Queda Total (🔴)</Label>
+                              <Label htmlFor="labelCritical" className="text-red-750 dark:text-red-455 font-semibold text-sm">Status: Queda Total (🔴)</Label>
                               <Input
                                 id="labelCritical"
                                 type="text"
                                 value={labelCritical}
                                 onChange={(e) => setLabelCritical(e.target.value)}
-                                className="bg-zinc-900 border-zinc-800 text-red-450 focus:border-red-500"
+                                className="bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-300 dark:border-zinc-800 text-red-700 dark:text-red-400 focus:border-red-500"
                                 placeholder="Ex: Queda total"
                                 disabled={!hasWriteAccess('alerts')}
                                 required
@@ -3187,7 +3221,7 @@ export default function AdminPage() {
                         </div>
 
                         {hasWriteAccess('alerts') && (
-                          <div className="flex justify-end pt-4 border-t border-zinc-900">
+                          <div className="flex justify-end pt-4 border-t border-zinc-200 dark:border-zinc-200 dark:border-zinc-900">
                             <Button
                               type="submit"
                               className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-8 py-2.5 rounded-xl transition-all shadow-lg shadow-indigo-600/20"
@@ -3209,7 +3243,7 @@ export default function AdminPage() {
                   </Card>
 
                   {/* CONFIG DISPLAY INTERVAL */}
-                  <Card className="bg-zinc-950/60 border-zinc-900 text-white">
+                  <Card className="bg-white dark:bg-zinc-950/60 border-zinc-200 dark:border-zinc-200 dark:border-zinc-900 text-zinc-950 dark:text-white">
                     <CardHeader>
                       <div className="flex flex-col sm:flex-row sm:items-center gap-3">
                         <CardTitle className="text-xl font-bold">Configurações de Exibição de Alertas</CardTitle>
@@ -3227,7 +3261,7 @@ export default function AdminPage() {
                       <form onSubmit={handleSaveAlertConfig} className="space-y-4">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div className="space-y-2">
-                            <Label htmlFor="displayInterval" className="text-zinc-300 font-semibold text-sm">
+                            <Label htmlFor="displayInterval" className="text-zinc-700 dark:text-zinc-300 font-semibold text-sm">
                               Intervalo de Exibição (Minutos)
                             </Label>
                             <Input
@@ -3236,7 +3270,7 @@ export default function AdminPage() {
                               min={1}
                               value={displayInterval}
                               onChange={(e) => setDisplayInterval(Number(e.target.value))}
-                              className="bg-zinc-900 border-zinc-800 text-white focus:border-indigo-500"
+                              className="bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-300 dark:border-zinc-800 text-zinc-950 dark:text-white focus:border-indigo-500"
                               disabled={!hasWriteAccess('alerts')}
                               required
                             />
@@ -3246,7 +3280,7 @@ export default function AdminPage() {
                           </div>
 
                           <div className="space-y-2">
-                            <Label htmlFor="autoCloseInterval" className="text-zinc-300 font-semibold text-sm">
+                            <Label htmlFor="autoCloseInterval" className="text-zinc-700 dark:text-zinc-300 font-semibold text-sm">
                               Auto-fechamento do Alerta (Segundos)
                             </Label>
                             <Input
@@ -3255,7 +3289,7 @@ export default function AdminPage() {
                               min={0}
                               value={autoCloseInterval}
                               onChange={(e) => setAutoCloseInterval(Number(e.target.value))}
-                              className="bg-zinc-900 border-zinc-800 text-white focus:border-indigo-500"
+                              className="bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-300 dark:border-zinc-800 text-zinc-950 dark:text-white focus:border-indigo-500"
                               disabled={!hasWriteAccess('alerts')}
                               required
                             />
@@ -3281,7 +3315,7 @@ export default function AdminPage() {
                   </Card>
 
                   {/* DETECÇÃO AUTOMÁTICA DE ALERTAS */}
-                  <Card className="bg-zinc-950/60 border-zinc-900 text-white">
+                  <Card className="bg-white dark:bg-zinc-950/60 border-zinc-200 dark:border-zinc-200 dark:border-zinc-900 text-zinc-950 dark:text-white">
                     <CardHeader>
                       <div className="flex flex-col sm:flex-row sm:items-center gap-3">
                         <CardTitle className="text-xl font-bold flex items-center gap-2">
@@ -3303,9 +3337,9 @@ export default function AdminPage() {
                         
                         {/* Toggle & Informative Warning */}
                         <div className="space-y-4">
-                          <div className="flex items-center justify-between p-3.5 bg-zinc-900/30 border border-zinc-900 rounded-xl">
+                          <div className="flex items-center justify-between p-3.5 bg-zinc-50 dark:bg-zinc-900/30 border border-zinc-200 dark:border-zinc-200 dark:border-zinc-900 rounded-xl">
                             <div className="space-y-1 pr-4">
-                              <Label htmlFor="autoAlertEnabled" className="text-sm font-semibold text-zinc-200 cursor-pointer">
+                              <Label htmlFor="autoAlertEnabled" className="text-sm font-semibold text-zinc-900 dark:text-zinc-200 cursor-pointer">
                                 Ativar Detecção Automática
                               </Label>
                               <p className="text-xs text-zinc-500">
@@ -3318,7 +3352,7 @@ export default function AdminPage() {
                               checked={autoAlertEnabled && !hasActiveManualAlert}
                               disabled={!hasWriteAccess('alerts') || hasActiveManualAlert}
                               onChange={(e) => setAutoAlertEnabled(e.target.checked)}
-                              className="rounded border-zinc-800 bg-zinc-900 text-indigo-600 focus:ring-indigo-500 h-5 w-5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                              className="rounded border-zinc-300 dark:border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-indigo-600 focus:ring-indigo-500 h-5 w-5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                             />
                           </div>
 
@@ -3332,7 +3366,7 @@ export default function AdminPage() {
                               </div>
                             </div>
                           ) : (
-                            <div className="p-3.5 bg-zinc-900/30 border border-zinc-900 rounded-xl text-xs flex gap-2.5 text-zinc-400 leading-relaxed">
+                            <div className="p-3.5 bg-zinc-50 dark:bg-zinc-900/30 border border-zinc-200 dark:border-zinc-200 dark:border-zinc-900 rounded-xl text-xs flex gap-2.5 text-zinc-400 leading-relaxed">
                               <AlertCircle className="h-5 w-5 shrink-0 text-zinc-500" />
                               <div>
                                 <strong>Nota de Convivência de Alertas:</strong> A detecção automática é suspensa automaticamente se houver um alerta manual ativo. 
@@ -3343,9 +3377,9 @@ export default function AdminPage() {
                         </div>
 
                         {/* Numeric Thresholds */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2 border-t border-zinc-900">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2 border-t border-zinc-200 dark:border-zinc-900">
                           <div className="space-y-2">
-                            <Label htmlFor="autoAlertPercentage" className="text-zinc-300 font-semibold text-sm">
+                            <Label htmlFor="autoAlertPercentage" className="text-zinc-700 dark:text-zinc-300 font-semibold text-sm">
                               Porcentagem Mínima de Acessos (%)
                             </Label>
                             <Input
@@ -3355,7 +3389,7 @@ export default function AdminPage() {
                               max={100}
                               value={autoAlertPercentage}
                               onChange={(e) => setAutoAlertPercentage(Number(e.target.value))}
-                              className="bg-zinc-900 border-zinc-800 text-white focus:border-indigo-500"
+                              className="bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-300 dark:border-zinc-800 text-zinc-950 dark:text-white focus:border-indigo-500"
                               disabled={!hasWriteAccess('alerts') || hasActiveManualAlert}
                               required
                             />
@@ -3365,7 +3399,7 @@ export default function AdminPage() {
                           </div>
 
                           <div className="space-y-2">
-                            <Label htmlFor="autoAlertMinReports" className="text-zinc-300 font-semibold text-sm">
+                            <Label htmlFor="autoAlertMinReports" className="text-zinc-700 dark:text-zinc-300 font-semibold text-sm">
                               Volume Mínimo de Relatos (X)
                             </Label>
                             <Input
@@ -3374,7 +3408,7 @@ export default function AdminPage() {
                               min={1}
                               value={autoAlertMinReports}
                               onChange={(e) => setAutoAlertMinReports(Number(e.target.value))}
-                              className="bg-zinc-900 border-zinc-800 text-white focus:border-indigo-500"
+                              className="bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-300 dark:border-zinc-800 text-zinc-950 dark:text-white focus:border-indigo-500"
                               disabled={!hasWriteAccess('alerts') || hasActiveManualAlert}
                               required
                             />
@@ -3385,9 +3419,9 @@ export default function AdminPage() {
                         </div>
 
                         {/* Title and Description */}
-                        <div className="space-y-4 pt-4 border-t border-zinc-900">
+                        <div className="space-y-4 pt-4 border-t border-zinc-200 dark:border-zinc-900">
                           <div className="space-y-2">
-                            <Label htmlFor="autoAlertTitle" className="text-zinc-300 font-semibold text-sm">
+                            <Label htmlFor="autoAlertTitle" className="text-zinc-700 dark:text-zinc-300 font-semibold text-sm">
                               Título do Alerta Automático
                             </Label>
                             <Input
@@ -3396,7 +3430,7 @@ export default function AdminPage() {
                               value={autoAlertTitle}
                               onChange={(e) => setAutoAlertTitle(e.target.value)}
                               placeholder="Ex: Instabilidade Geral na Rede"
-                              className="bg-zinc-900 border-zinc-800 text-white focus:border-indigo-500"
+                              className="bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-300 dark:border-zinc-800 text-zinc-950 dark:text-white focus:border-indigo-500"
                               disabled={!hasWriteAccess('alerts') || hasActiveManualAlert}
                               required
                             />
@@ -3406,7 +3440,7 @@ export default function AdminPage() {
                           </div>
 
                           <div className="space-y-2">
-                            <Label htmlFor="autoAlertDescription" className="text-zinc-300 font-semibold text-sm">
+                            <Label htmlFor="autoAlertDescription" className="text-zinc-700 dark:text-zinc-300 font-semibold text-sm">
                               Descrição Informativa do Alerta Automático
                             </Label>
                             <textarea
@@ -3415,7 +3449,7 @@ export default function AdminPage() {
                               value={autoAlertDescription}
                               onChange={(e) => setAutoAlertDescription(e.target.value)}
                               placeholder="Ex: Identificamos um pico elevado de relatos em nossa rede..."
-                              className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3.5 py-2 text-white text-sm focus:border-indigo-500 focus:outline-none placeholder-zinc-500"
+                              className="w-full bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-800 rounded-xl px-3.5 py-2 text-zinc-950 dark:text-white text-sm focus:border-indigo-500 focus:outline-none placeholder-zinc-400 dark:placeholder-zinc-500"
                               disabled={!hasWriteAccess('alerts') || hasActiveManualAlert}
                               required
                             />
@@ -3426,7 +3460,7 @@ export default function AdminPage() {
                         </div>
 
                         {hasWriteAccess('alerts') && (
-                          <div className="flex justify-end pt-4 border-t border-zinc-900">
+                          <div className="flex justify-end pt-4 border-t border-zinc-200 dark:border-zinc-200 dark:border-zinc-900">
                             <Button
                               type="submit"
                               className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-8 py-2.5 rounded-xl transition-all shadow-lg shadow-indigo-600/20"
@@ -3441,8 +3475,8 @@ export default function AdminPage() {
                   </Card>
 
                   {/* ALERTS HISTORY & CRUD */}
-                  <Card className="bg-zinc-950/60 border-zinc-900 text-white">
-                    <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-900 pb-5">
+                  <Card className="bg-white dark:bg-zinc-950/60 border-zinc-200 dark:border-zinc-200 dark:border-zinc-900 text-zinc-950 dark:text-white">
+                    <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-200 dark:border-zinc-900 pb-5">
                       <div>
                         <div className="flex flex-col sm:flex-row sm:items-center gap-3">
                           <CardTitle className="text-xl font-bold">Alertas de Instabilidade de Rede</CardTitle>
@@ -3480,17 +3514,17 @@ export default function AdminPage() {
                           Nenhum alerta de instabilidade criado até o momento.
                         </div>
                       ) : (
-                        <div className="overflow-x-auto rounded-lg border border-zinc-900">
-                          <Table className="bg-zinc-950/80">
-                            <TableHeader className="bg-zinc-900/50 border-zinc-850">
-                              <TableRow className="hover:bg-zinc-900/20">
-                                <TableHead className="text-zinc-400 font-semibold">Alerta</TableHead>
-                                <TableHead className="text-zinc-400 font-semibold">Tipo</TableHead>
-                                <TableHead className="text-zinc-400 font-semibold">Descrição</TableHead>
-                                <TableHead className="text-zinc-400 font-semibold">Expiração</TableHead>
-                                <TableHead className="text-zinc-400 font-semibold text-center">Status</TableHead>
+                        <div className="overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-200 dark:border-zinc-900">
+                          <Table className="bg-white dark:bg-zinc-950/80">
+                            <TableHeader className="bg-zinc-50 dark:bg-zinc-900/50 border-zinc-200 dark:border-zinc-200 dark:border-zinc-850">
+                              <TableRow className="hover:bg-zinc-100/50 dark:hover:bg-zinc-900/20 border-b border-zinc-250 dark:border-zinc-200 dark:border-zinc-850">
+                                <TableHead className="text-zinc-550 dark:text-zinc-400 font-bold">Alerta</TableHead>
+                                <TableHead className="text-zinc-550 dark:text-zinc-400 font-bold">Tipo</TableHead>
+                                <TableHead className="text-zinc-550 dark:text-zinc-400 font-bold">Descrição</TableHead>
+                                <TableHead className="text-zinc-550 dark:text-zinc-400 font-bold">Expiração</TableHead>
+                                <TableHead className="text-zinc-550 dark:text-zinc-400 font-bold text-center">Status</TableHead>
                                 {hasWriteAccess('alerts') && (
-                                  <TableHead className="text-zinc-400 font-semibold text-right">Ações</TableHead>
+                                  <TableHead className="text-zinc-550 dark:text-zinc-400 font-bold text-right">Ações</TableHead>
                                 )}
                               </TableRow>
                             </TableHeader>
@@ -3503,22 +3537,22 @@ export default function AdminPage() {
                                 const isActive = alert.is_active && !isExpired;
 
                                 return (
-                                  <TableRow key={alert.id} className="hover:bg-zinc-900/30 border-zinc-900">
-                                    <TableCell className="font-bold text-white text-sm">
+                                  <TableRow key={alert.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-900/30 border-b border-zinc-200 dark:border-zinc-200 dark:border-zinc-900">
+                                    <TableCell className="font-bold text-zinc-900 dark:text-white text-sm">
                                       {alert.title}
                                       <div className="text-[10px] text-zinc-500 font-normal mt-0.5">Criado em: {createdDate}</div>
                                     </TableCell>
-                                    <TableCell className="text-zinc-300 text-xs">
-                                      <Badge variant="outline" className="border-indigo-500/30 text-indigo-400 text-[10px]">
+                                    <TableCell className="text-zinc-650 dark:text-zinc-300 text-xs">
+                                      <Badge className="bg-indigo-50 text-indigo-700 border border-indigo-200 dark:bg-indigo-500/10 dark:text-indigo-400 dark:border-indigo-500/20 text-[10px] font-semibold">
                                         {alert.alert_type}
                                       </Badge>
                                     </TableCell>
-                                    <TableCell className="text-zinc-400 text-xs max-w-[250px] truncate" title={alert.description}>
+                                    <TableCell className="text-zinc-650 dark:text-zinc-400 text-xs max-w-[250px] truncate" title={alert.description}>
                                       {alert.description}
                                     </TableCell>
-                                    <TableCell className="text-zinc-400 text-xs">
+                                    <TableCell className="text-zinc-600 dark:text-zinc-400 text-xs">
                                       {alert.alert_type === 'Detecção Automática' ? (
-                                        <span className="text-indigo-400 font-semibold">Automático</span>
+                                        <span className="text-indigo-650 dark:text-indigo-400 font-semibold">Automático</span>
                                       ) : alert.expires_at ? (
                                         <span>Expirará: {new Date(alert.expires_at).toLocaleString('pt-BR')}</span>
                                       ) : (
@@ -3527,15 +3561,15 @@ export default function AdminPage() {
                                     </TableCell>
                                     <TableCell className="text-center">
                                       {isActive ? (
-                                        <Badge className="bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[10px] mx-auto w-fit flex gap-1 items-center justify-center">
+                                        <Badge className="bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20 text-[10px] mx-auto w-fit flex gap-1 items-center justify-center font-semibold shadow-sm">
                                           <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse mr-1" /> Ativo
                                         </Badge>
                                       ) : isExpired ? (
-                                        <Badge className="bg-zinc-900 text-zinc-500 border border-zinc-800 text-[10px] mx-auto w-fit flex gap-1 items-center justify-center">
+                                        <Badge className="bg-zinc-50 dark:bg-zinc-900 text-zinc-650 dark:text-zinc-500 border border-zinc-250 dark:border-zinc-800 text-[10px] mx-auto w-fit flex gap-1 items-center justify-center font-semibold">
                                           Expirado
                                         </Badge>
                                       ) : (
-                                        <Badge className="bg-red-500/10 text-red-400 border border-red-500/20 text-[10px] mx-auto w-fit flex gap-1 items-center justify-center">
+                                        <Badge className="bg-red-50 text-red-600 border border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20 text-[10px] mx-auto w-fit flex gap-1 items-center justify-center font-semibold shadow-sm">
                                           Inativo
                                         </Badge>
                                       )}
@@ -3549,10 +3583,10 @@ export default function AdminPage() {
                                                 onClick={() => handleToggleAlertActive(alert.id, alert.is_active)}
                                                 variant="ghost"
                                                 size="sm"
-                                                className={`text-xs px-2.5 py-1 rounded-lg border h-8 ${
+                                                className={`text-xs px-2.5 py-1 rounded-lg border h-8 transition-all duration-200 font-semibold ${
                                                   alert.is_active
-                                                    ? 'border-red-500/20 text-red-450 hover:bg-red-500/10'
-                                                    : 'border-emerald-500/20 text-emerald-450 hover:bg-emerald-500/10'
+                                                    ? 'border-red-200 dark:border-red-500/20 text-red-650 dark:text-red-400 bg-red-50/40 dark:bg-red-500/5 hover:bg-red-100/60 dark:hover:bg-red-500/15'
+                                                    : 'border-emerald-200 dark:border-emerald-500/20 text-emerald-700 dark:text-emerald-400 bg-emerald-50/40 dark:bg-emerald-500/5 hover:bg-emerald-100/60 dark:hover:bg-emerald-500/15'
                                                 }`}
                                                 disabled={isExpired}
                                                 title={alert.is_active ? 'Desativar alerta' : 'Ativar alerta'}
@@ -3572,7 +3606,7 @@ export default function AdminPage() {
                                                 }}
                                                 variant="ghost"
                                                 size="icon"
-                                                className="h-8 w-8 text-indigo-400 hover:text-indigo-300 hover:bg-indigo-500/10 rounded-lg"
+                                                className="h-8 w-8 text-indigo-600 hover:text-indigo-750 hover:bg-indigo-50 dark:text-indigo-400 dark:hover:text-indigo-300 dark:hover:bg-indigo-500/10 rounded-lg"
                                                 title="Editar Alerta"
                                               >
                                                 <Edit2 className="h-3.5 w-3.5" />
@@ -3584,7 +3618,7 @@ export default function AdminPage() {
                                             onClick={() => handleDeleteAlert(alert.id)}
                                             variant="ghost"
                                             size="icon"
-                                            className="h-8 w-8 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg"
+                                            className="h-8 w-8 text-red-600 hover:text-red-750 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-500/10 rounded-lg"
                                             title="Excluir Alerta"
                                           >
                                             <Trash2 className="h-3.5 w-3.5" />
@@ -3605,7 +3639,7 @@ export default function AdminPage() {
               )}
 
               {settingsSubTab === 'logs' && (
-                <Card className="bg-zinc-950/60 border-zinc-900 text-white">
+                <Card className="bg-white dark:bg-zinc-950/60 border-zinc-200 dark:border-zinc-200 dark:border-zinc-900 text-zinc-950 dark:text-white">
                   <CardHeader>
                     <CardTitle className="text-xl font-bold">Logs de Auditoria</CardTitle>
                     <CardDescription className="text-zinc-500">
@@ -3618,25 +3652,25 @@ export default function AdminPage() {
                         Nenhum log registrado ou tabela de auditoria não configurada.
                       </div>
                     ) : (
-                      <div className="overflow-x-auto rounded-lg border border-zinc-900">
-                        <Table className="bg-zinc-950/80">
-                          <TableHeader className="bg-zinc-900/50 border-zinc-850">
-                            <TableRow className="hover:bg-zinc-900/20">
-                              <TableHead className="text-zinc-400 font-semibold">Data</TableHead>
-                              <TableHead className="text-zinc-400 font-semibold">Usuário</TableHead>
-                              <TableHead className="text-zinc-400 font-semibold">Ação</TableHead>
-                              <TableHead className="text-zinc-400 font-semibold">Detalhes</TableHead>
+                      <div className="overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-200 dark:border-zinc-900">
+                        <Table className="bg-white dark:bg-zinc-950/80">
+                          <TableHeader className="bg-zinc-50 dark:bg-zinc-900/50 border-zinc-200 dark:border-zinc-200 dark:border-zinc-850">
+                            <TableRow className="hover:bg-zinc-100/50 dark:hover:bg-zinc-900/20 border-b border-zinc-250 dark:border-zinc-200 dark:border-zinc-850">
+                              <TableHead className="text-zinc-550 dark:text-zinc-400 font-bold">Data</TableHead>
+                              <TableHead className="text-zinc-550 dark:text-zinc-400 font-bold">Usuário</TableHead>
+                              <TableHead className="text-zinc-550 dark:text-zinc-400 font-bold">Ação</TableHead>
+                              <TableHead className="text-zinc-550 dark:text-zinc-400 font-bold">Detalhes</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
                             {actionLogs.map((log) => {
                               const dateFormatted = new Date(log.created_at).toLocaleString('pt-BR');
                               return (
-                                <TableRow key={log.id} className="hover:bg-zinc-900/30 border-zinc-900">
-                                  <TableCell className="text-zinc-300 text-xs whitespace-nowrap">{dateFormatted}</TableCell>
-                                  <TableCell className="font-semibold text-white text-xs whitespace-nowrap">{log.user_email}</TableCell>
-                                  <TableCell className="text-indigo-400 font-semibold text-xs whitespace-nowrap">{log.action}</TableCell>
-                                  <TableCell className="text-zinc-400 text-xs whitespace-normal break-words min-w-[250px] max-w-xs md:max-w-md lg:max-w-xl" title={log.details}>{log.details}</TableCell>
+                                <TableRow key={log.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-900/30 border-b border-zinc-200 dark:border-zinc-200 dark:border-zinc-900">
+                                  <TableCell className="text-zinc-650 dark:text-zinc-300 text-xs whitespace-nowrap">{dateFormatted}</TableCell>
+                                  <TableCell className="font-semibold text-zinc-900 dark:text-white text-xs whitespace-nowrap">{log.user_email}</TableCell>
+                                  <TableCell className="text-indigo-650 dark:text-indigo-400 font-semibold text-xs whitespace-nowrap">{log.action}</TableCell>
+                                  <TableCell className="text-zinc-650 dark:text-zinc-400 text-xs whitespace-normal break-words min-w-[250px] max-w-xs md:max-w-md lg:max-w-xl" title={log.details}>{log.details}</TableCell>
                                 </TableRow>
                               );
                             })}
@@ -3649,8 +3683,8 @@ export default function AdminPage() {
               )}
 
               {currentUserProfile?.role === 'superadmin' && settingsSubTab === 'users' && (
-                <Card className="bg-zinc-950/60 border-zinc-900 text-white">
-                  <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-900 pb-5">
+                <Card className="bg-white dark:bg-zinc-950/60 border-zinc-200 dark:border-zinc-200 dark:border-zinc-900 text-zinc-950 dark:text-white">
+                  <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-200 dark:border-zinc-900 pb-5">
                     <div>
                       <CardTitle className="text-xl font-bold">Gerenciamento de Usuários</CardTitle>
                       <CardDescription className="text-zinc-500">
@@ -3674,19 +3708,19 @@ export default function AdminPage() {
                       <div className="space-y-4">
                         {/* SEARCH INPUT BAR */}
                         <div className="relative w-full max-w-sm">
-                          <Icons.Search className="absolute left-3 top-2.5 h-4 w-4 text-zinc-550" />
+                          <Icons.Search className="absolute left-3 top-2.5 h-4 w-4 text-zinc-400 dark:text-zinc-500" />
                           <Input
                             type="text"
                             placeholder="Buscar usuários por nome ou e-mail..."
                             value={searchUsersQuery}
                             onChange={(e) => setSearchUsersQuery(e.target.value)}
-                            className="pl-9 bg-zinc-900/40 border-zinc-900 focus:border-zinc-800 text-zinc-200 placeholder-zinc-550 text-xs rounded-xl"
+                            className="pl-9 bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-800 text-zinc-950 dark:text-white placeholder-zinc-450 dark:placeholder-zinc-500 text-xs rounded-xl focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                           />
                           {searchUsersQuery && (
                             <button
                               type="button"
                               onClick={() => setSearchUsersQuery('')}
-                              className="absolute right-3 top-2.5 hover:text-white text-zinc-500 transition-colors"
+                              className="absolute right-3 top-2.5 text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors"
                               title="Limpar pesquisa"
                             >
                               <Icons.X className="h-4 w-4" />
@@ -3695,30 +3729,30 @@ export default function AdminPage() {
                         </div>
 
                         {filteredUsers.length === 0 ? (
-                          <div className="text-center py-12 text-zinc-550 border border-zinc-900 rounded-xl bg-zinc-950/30 text-xs">
+                          <div className="text-center py-12 text-zinc-550 border border-zinc-200 dark:border-zinc-900 rounded-xl bg-zinc-950/30 text-xs">
                             Nenhum usuário correspondente encontrado para a pesquisa.
                           </div>
                         ) : (
-                          <div className="overflow-x-auto rounded-lg border border-zinc-900">
-                            <Table className="bg-zinc-950/80">
-                              <TableHeader className="bg-zinc-900/50 border-zinc-850">
-                                <TableRow className="hover:bg-zinc-900/20">
-                                  <TableHead className="text-zinc-400 font-semibold">Nome</TableHead>
-                                  <TableHead className="text-zinc-400 font-semibold">Usuário (E-mail)</TableHead>
-                                  <TableHead className="text-zinc-400 font-semibold">Cargo</TableHead>
-                                  <TableHead className="text-zinc-400 font-semibold">Permissões Permitidas</TableHead>
-                                  <TableHead className="text-zinc-400 font-semibold text-right">Ações</TableHead>
+                          <div className="overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-200 dark:border-zinc-900">
+                            <Table className="bg-white dark:bg-zinc-950/80">
+                              <TableHeader className="bg-zinc-50 dark:bg-zinc-900/50 border-zinc-200 dark:border-zinc-200 dark:border-zinc-850">
+                                <TableRow className="hover:bg-zinc-100/50 dark:hover:bg-zinc-900/20 border-b border-zinc-250 dark:border-zinc-200 dark:border-zinc-850">
+                                  <TableHead className="text-zinc-550 dark:text-zinc-400 font-bold">Nome</TableHead>
+                                  <TableHead className="text-zinc-550 dark:text-zinc-400 font-bold">Usuário (E-mail)</TableHead>
+                                  <TableHead className="text-zinc-550 dark:text-zinc-400 font-bold">Cargo</TableHead>
+                                  <TableHead className="text-zinc-550 dark:text-zinc-400 font-bold">Permissões Permitidas</TableHead>
+                                  <TableHead className="text-zinc-550 dark:text-zinc-400 font-bold text-right">Ações</TableHead>
                                 </TableRow>
                               </TableHeader>
                               <TableBody>
                                 {filteredUsers.map((user) => {
                                   const isSelf = user.email.toLowerCase() === currentUserProfile?.email.toLowerCase();
                                   return (
-                                    <TableRow key={user.email} className="hover:bg-zinc-900/30 border-zinc-900">
-                                      <TableCell className="font-semibold text-zinc-300 text-sm whitespace-nowrap">
+                                    <TableRow key={user.email} className="hover:bg-zinc-50 dark:hover:bg-zinc-900/30 border-b border-zinc-200 dark:border-zinc-200 dark:border-zinc-900">
+                                      <TableCell className="font-semibold text-zinc-800 dark:text-zinc-300 text-sm whitespace-nowrap">
                                         {user.name || '-'}
                                       </TableCell>
-                                      <TableCell className="font-bold text-white text-sm whitespace-nowrap">
+                                      <TableCell className="font-bold text-zinc-900 dark:text-white text-sm whitespace-nowrap">
                                         <div className="flex items-center gap-1.5">
                                           <span>{user.email}</span>
                                           {isSelf && (
@@ -3728,15 +3762,15 @@ export default function AdminPage() {
                                       </TableCell>
                                       <TableCell className="whitespace-nowrap">
                                         {user.role === 'superadmin' ? (
-                                          <Badge className="bg-red-500/15 text-red-400 border border-red-500/20 text-[10px]">Superadmin</Badge>
+                                          <Badge className="bg-red-50 dark:bg-red-500/15 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-500/20 text-[10px]">Superadmin</Badge>
                                         ) : (
-                                          <Badge className="bg-zinc-850 text-zinc-400 border border-zinc-800 text-[10px]">Admin</Badge>
+                                          <Badge className="bg-zinc-100 dark:bg-zinc-900 text-zinc-650 dark:text-zinc-400 border border-zinc-250 dark:border-zinc-850 text-[10px]">Admin</Badge>
                                         )}
                                       </TableCell>
                                       <TableCell>
                                         <div className="flex flex-wrap gap-1.5">
                                           {user.role === 'superadmin' ? (
-                                            <Badge className="bg-emerald-500/15 text-emerald-400 border border-emerald-500/20 text-[9px]">Acesso Total</Badge>
+                                            <Badge className="bg-emerald-50 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20 text-[9px]">Acesso Total</Badge>
                                           ) : (
                                             <>
                                               {(() => {
@@ -3756,8 +3790,8 @@ export default function AdminPage() {
                                                       variant="outline" 
                                                       className={`text-[9px] ${
                                                         isWrite 
-                                                          ? 'border-indigo-550/30 text-indigo-400 bg-indigo-500/5' 
-                                                          : 'border-zinc-800 text-zinc-400 bg-transparent'
+                                                          ? 'border-indigo-200 dark:border-indigo-550/30 text-indigo-650 dark:text-indigo-400 bg-indigo-50/50 dark:bg-indigo-500/5' 
+                                                          : 'border-zinc-250 dark:border-zinc-850 text-zinc-550 dark:text-zinc-400 bg-transparent'
                                                       }`}
                                                     >
                                                       {label} {isWrite ? '(Modificar)' : '(Leitura)'}
@@ -3779,7 +3813,7 @@ export default function AdminPage() {
                                             onClick={() => handleOpenEditUser(user)}
                                             variant="ghost"
                                             size="icon"
-                                            className="h-8 w-8 text-indigo-400 hover:text-indigo-300 hover:bg-indigo-500/10 rounded-lg"
+                                            className="h-8 w-8 text-indigo-600 hover:text-indigo-750 hover:bg-indigo-50 dark:text-indigo-400 dark:hover:text-indigo-300 dark:hover:bg-indigo-500/10 rounded-lg"
                                             title="Editar permissões"
                                           >
                                             <Edit2 className="h-3.5 w-3.5" />
@@ -3789,7 +3823,7 @@ export default function AdminPage() {
                                               onClick={() => handleDeleteUser(user.email)}
                                               variant="ghost"
                                               size="icon"
-                                              className="h-8 w-8 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg"
+                                              className="h-8 w-8 text-red-600 hover:text-red-750 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-500/10 rounded-lg"
                                               title="Remover usuário"
                                             >
                                               <Trash2 className="h-3.5 w-3.5" />
@@ -3815,7 +3849,7 @@ export default function AdminPage() {
       </main>
 
       {/* FOOTER */}
-      <footer className="relative z-10 border-t border-zinc-900 bg-zinc-950 py-6 px-6 text-center text-xs text-zinc-500 flex flex-col md:flex-row items-center justify-between gap-4 max-w-7xl mx-auto w-full">
+      <footer className="relative z-10 border-t border-zinc-200 dark:border-zinc-200 dark:border-zinc-900 bg-zinc-100 dark:bg-zinc-950 py-6 px-6 text-center text-xs text-zinc-500 flex flex-col md:flex-row items-center justify-between gap-4 max-w-7xl mx-auto w-full">
         <div>
           &copy; {new Date().getFullYear()} Intradetector. Todos os direitos reservados.
         </div>
@@ -3829,7 +3863,7 @@ export default function AdminPage() {
 
       {/* SERVICE ADD/EDIT MODAL */}
       <Dialog open={isServiceModalOpen} onOpenChange={(open) => !open && setIsServiceModalOpen(false)}>
-        <DialogContent className="max-w-md w-full bg-zinc-950 border border-zinc-800 text-white rounded-2xl p-6 max-h-[90vh] overflow-y-auto custom-scrollbar">
+        <DialogContent className="max-w-md w-full bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-300 dark:border-zinc-800 text-zinc-950 dark:text-white rounded-2xl p-6 max-h-[90vh] overflow-y-auto custom-scrollbar">
           <DialogHeader>
             <DialogTitle className="text-xl font-bold flex items-center gap-2">
               <Shield className="h-5 w-5 text-indigo-400" />
@@ -3843,25 +3877,25 @@ export default function AdminPage() {
           <form onSubmit={handleSaveService} className="space-y-4 mt-4">
             {/* Field: Name */}
             <div className="space-y-1.5">
-              <Label htmlFor="serviceName" className="text-zinc-300 text-xs font-semibold">Nome do Serviço *</Label>
+              <Label htmlFor="serviceName" className="text-zinc-650 dark:text-zinc-300 text-xs font-semibold">Nome do Serviço *</Label>
               <Input
                 id="serviceName"
                 value={serviceFormName}
                 onChange={(e) => setServiceFormName(e.target.value)}
                 placeholder="Ex: Netflix, Discord, Claro Fibra"
-                className="bg-zinc-900 border-zinc-800 text-white placeholder-zinc-550"
+                className="bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-300 dark:border-zinc-800 text-zinc-950 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-500"
                 required
               />
             </div>
 
             {/* Field: Category */}
             <div className="space-y-1.5">
-              <Label htmlFor="serviceCategory" className="text-zinc-300 text-xs font-semibold">Categoria *</Label>
+              <Label htmlFor="serviceCategory" className="text-zinc-650 dark:text-zinc-300 text-xs font-semibold">Categoria *</Label>
               <Select value={serviceFormCategory} onValueChange={(val) => setServiceFormCategory(val || '')}>
-                <SelectTrigger id="serviceCategory" className="bg-zinc-900 border-zinc-800 text-white">
+                <SelectTrigger id="serviceCategory" className="bg-white dark:bg-zinc-900 border-zinc-300 dark:border-zinc-300 dark:border-zinc-800 text-zinc-950 dark:text-white">
                   <SelectValue placeholder="Selecione a categoria" />
                 </SelectTrigger>
-                <SelectContent className="bg-zinc-900 border-zinc-800 text-white">
+                <SelectContent className="bg-white dark:bg-zinc-900 border-zinc-250 dark:border-zinc-300 dark:border-zinc-800 text-zinc-950 dark:text-white">
                   {categoriesList.map((cat) => (
                     <SelectItem key={cat.id} value={cat.name} className="hover:bg-zinc-800">
                       {cat.name}
@@ -3872,10 +3906,10 @@ export default function AdminPage() {
             </div>
 
             {/* Seção Ping Real */}
-            <div className="p-3.5 bg-zinc-900/40 border border-zinc-900 rounded-xl space-y-3.5 mt-2">
+            <div className="p-3.5 bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-200 dark:border-zinc-900 rounded-xl space-y-3.5 mt-2">
               <div className="flex items-center justify-between">
                 <div className="space-y-0.5">
-                  <Label htmlFor="servicePingEnabled" className="text-xs font-semibold text-zinc-200 cursor-pointer select-none">
+                  <Label htmlFor="servicePingEnabled" className="text-xs font-semibold text-zinc-900 dark:text-zinc-200 cursor-pointer select-none">
                     Habilitar Medidor de Ping
                   </Label>
                   <p className="text-[10px] text-zinc-500">
@@ -3887,20 +3921,20 @@ export default function AdminPage() {
                   type="checkbox"
                   checked={serviceFormPingEnabled}
                   onChange={(e) => setServiceFormPingEnabled(e.target.checked)}
-                  className="rounded border-zinc-800 bg-zinc-900 text-indigo-600 focus:ring-indigo-500 h-4.5 w-4.5 cursor-pointer"
+                  className="rounded border-zinc-300 dark:border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-indigo-600 focus:ring-indigo-500 h-4.5 w-4.5 cursor-pointer"
                 />
               </div>
 
               {serviceFormPingEnabled && (
-                <div className="space-y-3 pt-2 border-t border-zinc-850/60 animate-in fade-in duration-200">
+                <div className="space-y-3 pt-2 border-t border-zinc-200 dark:border-zinc-850/60 animate-in fade-in duration-200">
                   <div className="space-y-1.5">
-                    <Label htmlFor="servicePingAddress" className="text-zinc-300 text-[11px] font-semibold">Endereço IP ou URL *</Label>
+                    <Label htmlFor="servicePingAddress" className="text-zinc-650 dark:text-zinc-300 text-[11px] font-semibold">Endereço IP ou URL *</Label>
                     <Input
                       id="servicePingAddress"
                       value={serviceFormPingAddress}
                       onChange={(e) => setServiceFormPingAddress(e.target.value)}
                       placeholder="Ex: 8.8.8.8 ou google.com"
-                      className="bg-zinc-900 border-zinc-800 text-white placeholder-zinc-650 text-xs h-9 focus:border-indigo-500"
+                      className="bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-300 dark:border-zinc-800 text-zinc-950 dark:text-white placeholder-zinc-650 text-xs h-9 focus:border-indigo-500"
                       required={serviceFormPingEnabled}
                     />
                     <p className="text-[9px] text-zinc-500 leading-normal">
@@ -3909,7 +3943,7 @@ export default function AdminPage() {
                   </div>
 
                   <div className="space-y-1.5">
-                    <Label htmlFor="servicePingInterval" className="text-zinc-300 text-[11px] font-semibold">Intervalo de Checagem (Segundos) *</Label>
+                    <Label htmlFor="servicePingInterval" className="text-zinc-650 dark:text-zinc-300 text-[11px] font-semibold">Intervalo de Checagem (Segundos) *</Label>
                     <Input
                       id="servicePingInterval"
                       type="number"
@@ -3917,7 +3951,7 @@ export default function AdminPage() {
                       max={3600}
                       value={serviceFormPingInterval}
                       onChange={(e) => setServiceFormPingInterval(Number(e.target.value))}
-                      className="bg-zinc-900 border-zinc-800 text-white text-xs h-9 focus:border-indigo-500"
+                      className="bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-300 dark:border-zinc-800 text-zinc-950 dark:text-white text-xs h-9 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 rounded-md px-3"
                       required={serviceFormPingEnabled}
                     />
                     <p className="text-[9px] text-zinc-500 leading-normal">
@@ -3929,12 +3963,12 @@ export default function AdminPage() {
             </div>
 
             {/* Modal Buttons */}
-            <div className="flex justify-end gap-3 pt-4 border-t border-zinc-800">
+            <div className="flex justify-end gap-3 pt-4 border-t border-zinc-300 dark:border-zinc-800">
               <Button
                 type="button"
                 variant="outline"
                 onClick={() => setIsServiceModalOpen(false)}
-                className="border-zinc-800 hover:bg-zinc-900 text-zinc-400 hover:text-white"
+                className="border-zinc-350 dark:border-zinc-300 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-900 text-zinc-600 dark:text-zinc-400 hover:text-black dark:hover:text-white"
               >
                 Cancelar
               </Button>
@@ -3959,7 +3993,7 @@ export default function AdminPage() {
 
       {/* NETWORK ALERT ADD/EDIT MODAL */}
       <Dialog open={isAlertModalOpen} onOpenChange={(open) => !open && setIsAlertModalOpen(false)}>
-        <DialogContent className="max-w-md w-full bg-zinc-950 border border-zinc-800 text-white rounded-2xl p-6 max-h-[90vh] overflow-y-auto custom-scrollbar">
+        <DialogContent className="max-w-md w-full bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-300 dark:border-zinc-800 text-zinc-950 dark:text-white rounded-2xl p-6 max-h-[90vh] overflow-y-auto custom-scrollbar">
           <DialogHeader>
             <DialogTitle className="text-xl font-bold flex items-center gap-2">
               <AlertCircle className="h-5 w-5 text-amber-500 animate-pulse" />
@@ -3973,25 +4007,25 @@ export default function AdminPage() {
           <form onSubmit={handleSaveAlert} className="space-y-4 mt-4">
             {/* Field: Title */}
             <div className="space-y-1.5">
-              <Label htmlFor="alertTitle" className="text-zinc-300 text-xs font-semibold">Título do Alerta *</Label>
+              <Label htmlFor="alertTitle" className="text-zinc-650 dark:text-zinc-300 text-xs font-semibold">Título do Alerta *</Label>
               <Input
                 id="alertTitle"
                 value={alertFormTitle}
                 onChange={(e) => setAlertFormTitle(e.target.value)}
                 placeholder="Ex: Instabilidade no Backbone, Falha Rota Sul"
-                className="bg-zinc-900 border-zinc-800 text-white placeholder-zinc-500"
+                className="bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-300 dark:border-zinc-800 text-zinc-950 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-500"
                 required
               />
             </div>
 
             {/* Field: Alert Type */}
             <div className="space-y-1.5">
-              <Label htmlFor="alertType" className="text-zinc-300 text-xs font-semibold">Tipo do Alerta *</Label>
+              <Label htmlFor="alertType" className="text-zinc-650 dark:text-zinc-300 text-xs font-semibold">Tipo do Alerta *</Label>
               <Select value={alertFormType} onValueChange={(val) => setAlertFormType(val || 'Instabilidade Geral')}>
-                <SelectTrigger id="alertType" className="bg-zinc-900 border-zinc-800 text-white">
+                <SelectTrigger id="alertType" className="bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-300 dark:border-zinc-800 text-zinc-950 dark:text-white">
                   <SelectValue placeholder="Selecione o tipo" />
                 </SelectTrigger>
-                <SelectContent className="bg-zinc-900 border-zinc-800 text-white">
+                <SelectContent className="bg-white dark:bg-zinc-900 border-zinc-250 dark:border-zinc-300 dark:border-zinc-800 text-zinc-950 dark:text-white">
                   <SelectItem value="Instabilidade Geral">Instabilidade Geral (🟡)</SelectItem>
                   <SelectItem value="Queda de Link / Fibra">Queda de Link / Fibra (🔴)</SelectItem>
                   <SelectItem value="Lentidão / Latência">Lentidão / Latência (🟡)</SelectItem>
@@ -4002,15 +4036,15 @@ export default function AdminPage() {
 
             {/* Field: Expiration Mode */}
             <div className="space-y-1.5">
-              <Label htmlFor="expirationType" className="text-zinc-300 text-xs font-semibold">Tempo de Duração *</Label>
+              <Label htmlFor="expirationType" className="text-zinc-650 dark:text-zinc-300 text-xs font-semibold">Tempo de Duração *</Label>
               <Select
                 value={alertFormExpirationType}
                 onValueChange={(val: any) => setAlertFormExpirationType(val || 'manual')}
               >
-                <SelectTrigger id="expirationType" className="bg-zinc-900 border-zinc-800 text-white">
+                <SelectTrigger id="expirationType" className="bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-300 dark:border-zinc-800 text-zinc-950 dark:text-white">
                   <SelectValue placeholder="Selecione o modo de expiração" />
                 </SelectTrigger>
-                <SelectContent className="bg-zinc-900 border-zinc-800 text-white">
+                <SelectContent className="bg-white dark:bg-zinc-900 border-zinc-250 dark:border-zinc-300 dark:border-zinc-800 text-zinc-950 dark:text-white">
                   <SelectItem value="manual">Ativo até ser desativado manualmente</SelectItem>
                   <SelectItem value="scheduled">Definir data/hora de expiração programada</SelectItem>
                 </SelectContent>
@@ -4020,13 +4054,13 @@ export default function AdminPage() {
             {/* Scheduled Expiration datetime field (conditional) */}
             {alertFormExpirationType === 'scheduled' && (
               <div className="space-y-1.5">
-                <Label htmlFor="expiresAt" className="text-zinc-300 text-xs font-semibold">Data e Hora de Expiração *</Label>
+                <Label htmlFor="expiresAt" className="text-zinc-650 dark:text-zinc-300 text-xs font-semibold">Data e Hora de Expiração *</Label>
                 <Input
                   id="expiresAt"
                   type="datetime-local"
                   value={alertFormExpiresAt}
                   onChange={(e) => setAlertFormExpiresAt(e.target.value)}
-                  className="bg-zinc-900 border-zinc-800 text-white"
+                  className="bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-300 dark:border-zinc-800 text-zinc-950 dark:text-white focus:outline-none"
                   required
                 />
               </div>
@@ -4034,24 +4068,24 @@ export default function AdminPage() {
 
             {/* Field: Description */}
             <div className="space-y-1.5">
-              <Label htmlFor="alertDescription" className="text-zinc-300 text-xs font-semibold">Descrição Informativa *</Label>
+              <Label htmlFor="alertDescription" className="text-zinc-650 dark:text-zinc-300 text-xs font-semibold">Descrição Informativa *</Label>
               <textarea
                 id="alertDescription"
                 value={alertFormDescription}
                 onChange={(e) => setAlertFormDescription(e.target.value)}
                 placeholder="Ex: Identificamos lentidão no carregamento de serviços devido ao rompimento de fibra na rota Porto Alegre..."
-                className="w-full h-24 bg-zinc-900 border border-zinc-800 text-white placeholder-zinc-550 rounded-md p-3 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                className="w-full h-24 bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-300 dark:border-zinc-800 text-zinc-950 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-500 rounded-md p-3 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
                 required
               />
             </div>
 
             {/* Modal Buttons */}
-            <div className="flex justify-end gap-3 pt-4 border-t border-zinc-800">
+            <div className="flex justify-end gap-3 pt-4 border-t border-zinc-300 dark:border-zinc-800">
               <Button
                 type="button"
                 variant="outline"
                 onClick={() => setIsAlertModalOpen(false)}
-                className="border-zinc-800 hover:bg-zinc-900 text-zinc-400 hover:text-white"
+                className="border-zinc-350 dark:border-zinc-300 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-900 text-zinc-600 dark:text-zinc-400 hover:text-black dark:hover:text-white"
               >
                 Cancelar
               </Button>
@@ -4069,7 +4103,7 @@ export default function AdminPage() {
 
       {/* USER MANAGEMENT ADD/EDIT MODAL */}
       <Dialog open={isUserModalOpen} onOpenChange={(open) => !open && setIsUserModalOpen(false)}>
-        <DialogContent className="max-w-md w-full bg-zinc-950 border border-zinc-800 text-white rounded-2xl p-6 max-h-[90vh] overflow-y-auto custom-scrollbar">
+        <DialogContent className="max-w-md w-full bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-300 dark:border-zinc-800 text-zinc-950 dark:text-white rounded-2xl p-6 max-h-[90vh] overflow-y-auto custom-scrollbar">
           <DialogHeader>
             <DialogTitle className="text-xl font-bold flex items-center gap-2">
               <Shield className="h-5 w-5 text-indigo-400" />
@@ -4083,27 +4117,27 @@ export default function AdminPage() {
           <form onSubmit={handleSaveUser} className="space-y-4 mt-4">
             {/* Field: Name */}
             <div className="space-y-1.5">
-              <Label htmlFor="userName" className="text-zinc-300 text-xs font-semibold">Nome Completo *</Label>
+              <Label htmlFor="userName" className="text-zinc-650 dark:text-zinc-300 text-xs font-semibold">Nome Completo *</Label>
               <Input
                 id="userName"
                 value={userFormName}
                 onChange={(e) => setUserFormName(e.target.value)}
                 placeholder="Ex: João Silva"
-                className="bg-zinc-900 border-zinc-800 text-white placeholder-zinc-550 focus:border-indigo-500"
+                className="bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-300 dark:border-zinc-800 text-zinc-950 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-500 focus:border-indigo-500 focus:outline-none"
                 required
               />
             </div>
 
             {/* Field: Email */}
             <div className="space-y-1.5">
-              <Label htmlFor="userEmail" className="text-zinc-300 text-xs font-semibold">E-mail de Acesso *</Label>
+              <Label htmlFor="userEmail" className="text-zinc-650 dark:text-zinc-300 text-xs font-semibold">E-mail de Acesso *</Label>
               <Input
                 id="userEmail"
                 type="email"
                 value={userFormEmail}
                 onChange={(e) => setUserFormEmail(e.target.value)}
                 placeholder="Ex: usuario@empresa.com"
-                className="bg-zinc-900 border-zinc-800 text-white placeholder-zinc-550 focus:border-indigo-500"
+                className="bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-300 dark:border-zinc-800 text-zinc-950 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-500 focus:border-indigo-500 focus:outline-none"
                 disabled={!!editingUser}
                 required
               />
@@ -4112,14 +4146,14 @@ export default function AdminPage() {
             {/* Field: Password (only when creating) */}
             {!editingUser && (
               <div className="space-y-1.5">
-                <Label htmlFor="userPassword" className="text-zinc-300 text-xs font-semibold">Senha Inicial *</Label>
+                <Label htmlFor="userPassword" className="text-zinc-650 dark:text-zinc-300 text-xs font-semibold">Senha Inicial *</Label>
                 <Input
                   id="userPassword"
                   type="password"
                   value={userFormPassword}
                   onChange={(e) => setUserFormPassword(e.target.value)}
                   placeholder="Mínimo 6 caracteres"
-                  className="bg-zinc-900 border-zinc-800 text-white placeholder-zinc-550 focus:border-indigo-500"
+                  className="bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-300 dark:border-zinc-800 text-zinc-950 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-500 focus:border-indigo-500 focus:outline-none"
                   required
                 />
               </div>
@@ -4127,12 +4161,12 @@ export default function AdminPage() {
 
             {/* Field: Role */}
             <div className="space-y-1.5">
-              <Label htmlFor="userRole" className="text-zinc-300 text-xs font-semibold">Cargo de Acesso *</Label>
+              <Label htmlFor="userRole" className="text-zinc-650 dark:text-zinc-300 text-xs font-semibold">Cargo de Acesso *</Label>
               <Select value={userFormRole} onValueChange={(val: any) => setUserFormRole(val || 'admin')}>
-                <SelectTrigger id="userRole" className="bg-zinc-900 border-zinc-800 text-white">
+                <SelectTrigger id="userRole" className="bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-300 dark:border-zinc-800 text-zinc-950 dark:text-white">
                   <SelectValue placeholder="Selecione o cargo" />
                 </SelectTrigger>
-                <SelectContent className="bg-zinc-900 border-zinc-800 text-white">
+                <SelectContent className="bg-white dark:bg-zinc-900 border-zinc-250 dark:border-zinc-300 dark:border-zinc-800 text-zinc-950 dark:text-white">
                   <SelectItem value="superadmin">Superadmin (Acesso Total + Gravação)</SelectItem>
                   <SelectItem value="admin">Admin (Acesso Customizado + Apenas Leitura)</SelectItem>
                 </SelectContent>
@@ -4141,8 +4175,8 @@ export default function AdminPage() {
 
             {/* Field: Permissions (conditional) */}
             {userFormRole === 'admin' ? (
-              <div className="space-y-3 p-3.5 bg-zinc-900/40 border border-zinc-900 rounded-xl">
-                <Label className="text-zinc-300 text-xs font-semibold">Níveis de Acesso por Aba *</Label>
+              <div className="space-y-3 p-3.5 bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-200 dark:border-zinc-900 rounded-xl">
+                <Label className="text-zinc-650 dark:text-zinc-300 text-xs font-semibold">Níveis de Acesso por Aba *</Label>
                 
                 <div className="space-y-2 pt-1">
                   {[
@@ -4154,16 +4188,16 @@ export default function AdminPage() {
                     const currentVal = userFormPermissions[key];
                     const selectValue = currentVal === 'write' ? 'write' : (currentVal === 'read' || currentVal === true ? 'read' : 'none');
                     return (
-                      <div key={key} className="flex items-center justify-between py-1.5 border-b border-zinc-900/40 last:border-0 gap-4">
-                        <Label htmlFor={`perm-${key}`} className="text-zinc-400 text-xs font-normal cursor-pointer select-none">{label}</Label>
+                      <div key={key} className="flex items-center justify-between py-1.5 border-b border-zinc-200 dark:border-zinc-200 dark:border-zinc-200 dark:border-zinc-900/40 last:border-0 gap-4">
+                        <Label htmlFor={`perm-${key}`} className="text-zinc-600 dark:text-zinc-400 text-xs font-normal cursor-pointer select-none">{label}</Label>
                         <Select 
                           value={selectValue} 
                           onValueChange={(val) => setUserFormPermissions(prev => ({ ...prev, [key]: val as any }))}
                         >
-                          <SelectTrigger id={`perm-${key}`} className="w-[160px] bg-zinc-900 border-zinc-850 text-white text-xs h-8 rounded-lg">
+                          <SelectTrigger id={`perm-${key}`} className="w-[160px] bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-200 dark:border-zinc-850 text-zinc-950 dark:text-white text-xs h-8 rounded-lg">
                             <SelectValue placeholder="Selecione" />
                           </SelectTrigger>
-                          <SelectContent className="bg-zinc-900 border-zinc-850 text-white text-xs">
+                          <SelectContent className="bg-white dark:bg-zinc-900 border-zinc-250 dark:border-zinc-300 dark:border-zinc-800 text-zinc-950 dark:text-white text-xs">
                             <SelectItem value="none">Sem Acesso</SelectItem>
                             <SelectItem value="read">Só Visualizar</SelectItem>
                             <SelectItem value="write">Modificar Configs</SelectItem>
@@ -4175,19 +4209,19 @@ export default function AdminPage() {
                 </div>
               </div>
             ) : (
-              <div className="p-3 bg-indigo-950/20 border border-indigo-900/30 rounded-xl text-indigo-400 text-xs flex gap-2">
+              <div className="p-3 bg-indigo-50 dark:bg-indigo-950/20 border border-indigo-200 dark:border-indigo-900/30 rounded-xl text-indigo-700 dark:text-indigo-400 text-xs flex gap-2">
                 <Shield className="h-4 w-4 shrink-0 mt-0.5" />
                 <span>Superadministradores têm permissão total de leitura e gravação em todas as funcionalidades automaticamente.</span>
               </div>
             )}
 
             {/* Modal Buttons */}
-            <div className="flex justify-end gap-3 pt-4 border-t border-zinc-800 mt-2">
+            <div className="flex justify-end gap-3 pt-4 border-t border-zinc-300 dark:border-zinc-800 mt-2">
               <Button
                 type="button"
                 variant="outline"
                 onClick={() => setIsUserModalOpen(false)}
-                className="border-zinc-800 hover:bg-zinc-900 text-zinc-400 hover:text-white"
+                className="border-zinc-350 dark:border-zinc-300 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-900 text-zinc-600 dark:text-zinc-400 hover:text-black dark:hover:text-white"
               >
                 Cancelar
               </Button>
@@ -4205,7 +4239,7 @@ export default function AdminPage() {
 
       {/* CATEGORY MANAGEMENT MODAL */}
       <Dialog open={isCategoryModalOpen} onOpenChange={(open) => !open && setIsCategoryModalOpen(false)}>
-        <DialogContent className="sm:max-w-4xl max-w-4xl w-full bg-zinc-950 border border-zinc-800 text-white rounded-2xl p-6 max-h-[90vh] overflow-y-auto custom-scrollbar">
+        <DialogContent className="sm:max-w-4xl max-w-4xl w-full bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-300 dark:border-zinc-800 text-zinc-950 dark:text-white rounded-2xl p-6 max-h-[90vh] overflow-y-auto custom-scrollbar">
           <DialogHeader>
             <DialogTitle className="text-xl font-bold flex items-center gap-2">
               <Layers className="h-5 w-5 text-indigo-400" />
@@ -4218,8 +4252,8 @@ export default function AdminPage() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mt-6">
             {/* COLUMN 1: CATEGORY CREATION/EDITION FORM */}
-            <div className="space-y-4 pr-0 md:pr-4 md:border-r border-zinc-900">
-              <h3 className="text-sm font-semibold text-zinc-200 border-b border-zinc-900 pb-2 flex items-center gap-1.5">
+            <div className="space-y-4 pr-0 md:pr-4 md:border-r border-zinc-200 dark:border-zinc-200 dark:border-zinc-900">
+              <h3 className="text-sm font-semibold text-zinc-850 dark:text-zinc-200 border-b border-zinc-200 dark:border-zinc-200 dark:border-zinc-900 pb-2 flex items-center gap-1.5">
                 <Sliders className="h-4 w-4 text-indigo-400" />
                 <span>{editingCategory ? 'Editar Categoria' : 'Cadastrar Nova Categoria'}</span>
               </h3>
@@ -4233,7 +4267,7 @@ export default function AdminPage() {
                     value={categoryFormName}
                     onChange={(e) => setCategoryFormName(e.target.value)}
                     placeholder="Ex: Redes Sociais, Streaming, VPNs"
-                    className="bg-zinc-900 border-zinc-800 text-white placeholder-zinc-550 focus:border-indigo-500 text-sm"
+                    className="bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-300 dark:border-zinc-800 text-zinc-950 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-500 focus:border-indigo-500 focus:outline-none text-sm"
                     required
                   />
                 </div>
@@ -4242,10 +4276,10 @@ export default function AdminPage() {
                 <div className="space-y-1.5">
                   <Label htmlFor="catIcon" className="text-zinc-300 text-xs font-semibold">Escolher Ícone *</Label>
                   <Select value={categoryFormIcon} onValueChange={(val) => setCategoryFormIcon(val || 'Globe')}>
-                    <SelectTrigger id="catIcon" className="bg-zinc-900 border-zinc-800 text-white text-sm">
+                    <SelectTrigger id="catIcon" className="bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-300 dark:border-zinc-800 text-zinc-950 dark:text-white text-sm">
                       <SelectValue placeholder="Selecione o ícone" />
                     </SelectTrigger>
-                    <SelectContent className="bg-zinc-900 border-zinc-800 text-white text-sm">
+                    <SelectContent className="bg-white dark:bg-zinc-900 border-zinc-250 dark:border-zinc-300 dark:border-zinc-800 text-zinc-950 dark:text-white text-sm">
                       {COMMON_ICONS.map((icon) => (
                         <SelectItem key={icon.value} value={icon.value} className="hover:bg-zinc-800 cursor-pointer">
                           <div className="flex items-center gap-2">
@@ -4273,7 +4307,7 @@ export default function AdminPage() {
                       value={categoryFormCustomIcon}
                       onChange={(e) => setCategoryFormCustomIcon(e.target.value)}
                       placeholder="Ex: Server, Shield, Database, Laptop, Radio"
-                      className="bg-zinc-900 border-zinc-800 text-white placeholder-zinc-550 focus:border-indigo-500 text-sm font-mono"
+                      className="bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-300 dark:border-zinc-800 text-zinc-950 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-500 focus:border-indigo-500 focus:outline-none text-sm font-mono"
                       required
                     />
                     <p className="text-[10px] text-zinc-500 leading-normal">
@@ -4309,7 +4343,7 @@ export default function AdminPage() {
                         setCategoryFormIcon('Globe');
                         setCategoryFormCustomIcon('');
                       }}
-                      className="border-zinc-800 hover:bg-zinc-900 text-zinc-400 hover:text-white text-xs px-3 h-9"
+                      className="border-zinc-300 dark:border-zinc-300 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-900 text-zinc-600 dark:text-zinc-400 hover:text-black dark:hover:text-white text-xs px-3 h-9"
                     >
                       Cancelar
                     </Button>
@@ -4320,7 +4354,7 @@ export default function AdminPage() {
 
             {/* COLUMN 2: ACTIVE CATEGORIES VIEW */}
             <div className="space-y-4 flex flex-col min-w-0">
-              <h3 className="text-sm font-semibold text-zinc-200 border-b border-zinc-900 pb-2 flex items-center gap-1.5">
+              <h3 className="text-sm font-semibold text-zinc-850 dark:text-zinc-200 border-b border-zinc-200 dark:border-zinc-200 dark:border-zinc-900 pb-2 flex items-center gap-1.5">
                 <Layers className="h-4 w-4 text-indigo-400" />
                 <span>Categorias Ativas ({categoriesList.length})</span>
               </h3>
@@ -4335,14 +4369,14 @@ export default function AdminPage() {
                     return (
                       <div 
                         key={cat.id} 
-                        className="bg-zinc-900/30 hover:bg-zinc-900/60 border border-zinc-900 hover:border-zinc-850 rounded-xl p-3 flex items-center justify-between transition-all"
+                        className="bg-zinc-900/30 hover:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-900 hover:border-zinc-200 dark:border-zinc-850 rounded-xl p-3 flex items-center justify-between transition-all"
                       >
                         <div className="flex items-center gap-3 min-w-0 flex-1">
-                          <div className="bg-zinc-950 border border-zinc-850 p-2 rounded-lg shrink-0">
+                          <div className="bg-zinc-200 dark:bg-zinc-950 border border-zinc-250 dark:border-zinc-200 dark:border-zinc-850 p-2 rounded-lg shrink-0">
                             {renderCategoryIcon(cat.icon_name)}
                           </div>
                           <div className="min-w-0 flex-1 pr-1.5">
-                            <p className="text-sm font-bold text-white break-words leading-tight">{cat.name}</p>
+                            <p className="text-sm font-bold text-zinc-950 dark:text-white break-words leading-tight">{cat.name}</p>
                             <p className="text-[10px] text-zinc-500 font-mono truncate mt-0.5">{cat.icon_name}</p>
                           </div>
                         </div>
@@ -4352,7 +4386,7 @@ export default function AdminPage() {
                             onClick={() => handleOpenEditCategory(cat)}
                             variant="ghost"
                             size="icon"
-                            className="h-8 w-8 text-indigo-400 hover:text-indigo-350 hover:bg-indigo-500/10 rounded-lg"
+                            className="h-8 w-8 text-indigo-600 hover:text-indigo-750 hover:bg-indigo-50 dark:text-indigo-400 dark:hover:text-indigo-300 dark:hover:bg-indigo-500/10 rounded-lg"
                             title="Editar categoria"
                           >
                             <Edit2 className="h-3.5 w-3.5" />
@@ -4361,7 +4395,7 @@ export default function AdminPage() {
                             onClick={() => handleDeleteCategory(cat)}
                             variant="ghost"
                             size="icon"
-                            className="h-8 w-8 text-red-400 hover:text-red-350 hover:bg-red-500/10 rounded-lg"
+                            className="h-8 w-8 text-red-650 hover:text-red-750 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-500/10 rounded-lg"
                             title="Excluir categoria"
                           >
                             <Trash2 className="h-3.5 w-3.5" />
@@ -4375,12 +4409,12 @@ export default function AdminPage() {
             </div>
           </div>
 
-          <div className="flex justify-end pt-4 border-t border-zinc-900/60 mt-4">
+          <div className="flex justify-end pt-4 border-t border-zinc-200 dark:border-zinc-200 dark:border-zinc-200 dark:border-zinc-900/60 mt-4">
             <Button
               type="button"
               variant="outline"
               onClick={() => setIsCategoryModalOpen(false)}
-              className="border-zinc-800 hover:bg-zinc-900 text-zinc-400 hover:text-white font-medium text-xs px-6 py-2 rounded-xl"
+              className="border-zinc-350 dark:border-zinc-300 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-900 text-zinc-650 dark:text-zinc-400 hover:text-black dark:hover:text-white font-medium text-xs px-6 py-2 rounded-xl"
             >
               Fechar
             </Button>
@@ -4390,7 +4424,7 @@ export default function AdminPage() {
 
       {/* PING GLOBAL CONFIG MODAL */}
       <Dialog open={isPingConfigModalOpen} onOpenChange={(open) => !open && setIsPingConfigModalOpen(false)}>
-        <DialogContent className="max-w-md w-full bg-zinc-950 border border-zinc-800 text-white rounded-2xl p-6 max-h-[90vh] overflow-y-auto custom-scrollbar">
+        <DialogContent className="max-w-md w-full bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-300 dark:border-zinc-800 text-zinc-950 dark:text-white rounded-2xl p-6 max-h-[90vh] overflow-y-auto custom-scrollbar">
           <DialogHeader>
             <DialogTitle className="text-xl font-bold flex items-center gap-2">
               <Icons.Activity className="h-5 w-5 text-emerald-400" />
@@ -4410,7 +4444,7 @@ export default function AdminPage() {
                 value={pingConfigLabel}
                 onChange={(e) => setPingConfigLabel(e.target.value)}
                 placeholder="Ex: Ping Real (Latência)"
-                className="bg-zinc-900 border-zinc-800 text-white placeholder-zinc-550"
+                className="bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-300 dark:border-zinc-800 text-zinc-950 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-500"
                 disabled={!hasWriteAccess('cards')}
                 required
               />
@@ -4425,10 +4459,10 @@ export default function AdminPage() {
                 onValueChange={(val: 'threshold' | 'simple' | null) => setPingConfigMode(val || 'threshold')}
                 disabled={!hasWriteAccess('cards')}
               >
-                <SelectTrigger id="pingConfigMode" className="bg-zinc-900 border-zinc-800 text-white text-xs h-9">
+                <SelectTrigger id="pingConfigMode" className="bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-300 dark:border-zinc-800 text-zinc-950 dark:text-white text-xs h-9">
                   <SelectValue placeholder="Selecione o modo" />
                 </SelectTrigger>
-                <SelectContent className="bg-zinc-900 border-zinc-805 text-white">
+                <SelectContent className="bg-white dark:bg-zinc-900 border-zinc-250 dark:border-zinc-800 text-zinc-950 dark:text-white">
                   <SelectItem value="threshold">Modo Limiar (Latência em milissegundos)</SelectItem>
                   <SelectItem value="simple">Modo Simples (Status Online / Offline)</SelectItem>
                 </SelectContent>
@@ -4449,7 +4483,7 @@ export default function AdminPage() {
                     min={1}
                     value={pingConfigGreen}
                     onChange={(e) => setPingConfigGreen(Number(e.target.value))}
-                    className="bg-zinc-900 border-zinc-800 text-emerald-450 focus:border-emerald-550"
+                    className="bg-zinc-900 border-zinc-300 dark:border-zinc-800 text-emerald-450 focus:border-emerald-550"
                     disabled={!hasWriteAccess('cards')}
                     required={pingConfigMode === 'threshold'}
                   />
@@ -4465,7 +4499,7 @@ export default function AdminPage() {
                     min={1}
                     value={pingConfigYellow}
                     onChange={(e) => setPingConfigYellow(Number(e.target.value))}
-                    className="bg-zinc-900 border-zinc-800 text-amber-450 focus:border-amber-500"
+                    className="bg-zinc-900 border-zinc-300 dark:border-zinc-800 text-amber-450 focus:border-amber-500"
                     disabled={!hasWriteAccess('cards')}
                     required={pingConfigMode === 'threshold'}
                   />
@@ -4475,12 +4509,12 @@ export default function AdminPage() {
             )}
 
             {/* Modal Buttons */}
-            <div className="flex justify-end gap-3 pt-4 border-t border-zinc-800 mt-2">
+            <div className="flex justify-end gap-3 pt-4 border-t border-zinc-300 dark:border-zinc-800 mt-2">
               <Button
                 type="button"
                 variant="outline"
                 onClick={() => setIsPingConfigModalOpen(false)}
-                className="border-zinc-800 hover:bg-zinc-900 text-zinc-400 hover:text-white"
+                className="border-zinc-350 dark:border-zinc-300 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-900 text-zinc-600 dark:text-zinc-400 hover:text-black dark:hover:text-white"
               >
                 Cancelar
               </Button>

@@ -119,18 +119,18 @@ function ServicePing({ service, config }: ServicePingProps) {
 
   return (
     <div 
-      className="border-t border-zinc-900 bg-zinc-950/40 px-5 py-2.5 flex items-center justify-between text-[11px] text-zinc-400 rounded-b-2xl"
+      className="border-t border-zinc-200 dark:border-zinc-900 bg-zinc-50/80 dark:bg-zinc-950/40 px-5 py-2.5 flex items-center justify-between text-[11px] text-zinc-650 dark:text-zinc-400 rounded-b-2xl"
       onClick={(e) => e.stopPropagation()}
     >
-      <div className="flex items-center gap-1.5 font-medium text-zinc-400">
-        <Icons.Activity className="h-3.5 w-3.5 text-zinc-650 shrink-0" />
+      <div className="flex items-center gap-1.5 font-medium text-zinc-650 dark:text-zinc-400">
+        <Icons.Activity className="h-3.5 w-3.5 text-zinc-550 dark:text-zinc-500 shrink-0" />
         <span>{config.label || 'Ping Real (Latência)'}</span>
       </div>
 
       <div className="flex items-center">
         {status === 'loading' && (
-          <span className="flex items-center gap-1 text-[10px] text-zinc-550">
-            <Icons.Loader2 className="h-3 w-3 animate-spin text-zinc-500 shrink-0" />
+          <span className="flex items-center gap-1 text-[10px] text-zinc-500 dark:text-zinc-400">
+            <Icons.Loader2 className="h-3 w-3 animate-spin text-zinc-400 dark:text-zinc-500 shrink-0" />
             Medindo...
           </span>
         )}
@@ -138,51 +138,51 @@ function ServicePing({ service, config }: ServicePingProps) {
         {config.mode === 'simple' ? (
           <>
             {status === 'success' && (
-              <Badge className="bg-emerald-500/10 text-emerald-405 border border-emerald-500/20 text-[9px] font-bold px-1.5 py-0 rounded-md flex items-center gap-1">
+              <span className="bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-200/50 dark:border-emerald-500/20 text-[9px] font-bold px-1.5 py-0 rounded-md flex items-center gap-1">
                 <span className="h-1 w-1 rounded-full bg-emerald-500" />
                 Online
-              </Badge>
+              </span>
             )}
             {(status === 'timeout' || status === 'error') && (
-              <Badge className="bg-red-500/10 text-red-400 border border-red-500/20 text-[9px] font-bold px-1.5 py-0 rounded-md flex items-center gap-1">
-                <span className="h-1 w-1 rounded-full bg-red-500 animate-pulse" />
+              <span className="bg-red-50 dark:bg-red-500/10 text-red-700 dark:text-red-400 border border-red-200/50 dark:border-red-500/20 text-[9px] font-bold px-1.5 py-0 rounded-md flex items-center gap-1">
+                <span className="h-1 w-1 rounded-full bg-red-500" />
                 Offline
-              </Badge>
+              </span>
             )}
           </>
         ) : (
           <>
             {status === 'timeout' && (
-              <Badge className="bg-red-500/10 text-red-400 border border-red-500/20 text-[9px] font-semibold px-1.5 py-0 rounded-md flex items-center gap-1">
-                <Icons.XCircle className="h-3 w-3 shrink-0" />
+              <span className="bg-red-50 dark:bg-red-500/10 text-red-700 dark:text-red-400 border border-red-200/50 dark:border-red-500/20 text-[9px] font-semibold px-1.5 py-0 rounded-md flex items-center gap-1">
+                <Icons.XCircle className="h-3 w-3 shrink-0 text-red-500" />
                 Esgotado (Offline)
-              </Badge>
+              </span>
             )}
 
             {status === 'error' && (
-              <Badge className="bg-red-500/10 text-red-400 border border-red-500/20 text-[9px] font-semibold px-1.5 py-0 rounded-md flex items-center gap-1">
-                <Icons.AlertOctagon className="h-3 w-3 shrink-0" />
+              <span className="bg-red-50 dark:bg-red-500/10 text-red-700 dark:text-red-400 border border-red-200/50 dark:border-red-500/20 text-[9px] font-semibold px-1.5 py-0 rounded-md flex items-center gap-1">
+                <Icons.AlertOctagon className="h-3 w-3 shrink-0 text-red-500" />
                 Falha
-              </Badge>
+              </span>
             )}
 
             {status === 'success' && latency !== null && (
               <>
                 {latency < config.threshold_green ? (
-                  <Badge className="bg-emerald-500/10 text-emerald-405 border border-emerald-500/20 text-[9px] font-bold px-1.5 py-0 rounded-md flex items-center gap-1">
+                  <span className="bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-200/50 dark:border-emerald-500/20 text-[9px] font-bold px-1.5 py-0 rounded-md flex items-center gap-1">
                     <span className="h-1 w-1 rounded-full bg-emerald-500" />
                     {latency} ms
-                  </Badge>
+                  </span>
                 ) : latency < config.threshold_yellow ? (
-                  <Badge className="bg-amber-500/10 text-amber-450 border border-amber-500/20 text-[9px] font-bold px-1.5 py-0 rounded-md flex items-center gap-1">
-                    <span className="h-1 w-1 rounded-full bg-amber-500 animate-pulse" />
+                  <span className="bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-250/50 dark:border-amber-500/20 text-[9px] font-bold px-1.5 py-0 rounded-md flex items-center gap-1">
+                    <span className="h-1 w-1 rounded-full bg-amber-500" />
                     {latency} ms
-                  </Badge>
+                  </span>
                 ) : (
-                  <Badge className="bg-red-500/10 text-red-400 border border-red-500/20 text-[9px] font-bold px-1.5 py-0 rounded-md flex items-center gap-1">
-                    <span className="h-1 w-1 rounded-full bg-red-550 animate-pulse" />
+                  <span className="bg-red-50 dark:bg-red-500/10 text-red-700 dark:text-red-400 border border-red-200/50 dark:border-red-500/20 text-[9px] font-bold px-1.5 py-0 rounded-md flex items-center gap-1">
+                    <span className="h-1 w-1 rounded-full bg-red-550" />
                     {latency} ms
-                  </Badge>
+                  </span>
                 )}
               </>
             )}
@@ -316,7 +316,30 @@ export default function HomePage() {
 
   // Hydration guard for Recharts
   const [isMounted, setIsMounted] = useState(false);
-  useEffect(() => { setIsMounted(true); }, []);
+  const [theme, setTheme] = useState<'light' | 'dark'>('light');
+
+  useEffect(() => {
+    setIsMounted(true);
+    const savedTheme = localStorage.getItem('theme') as 'light' | 'dark' | null;
+    const initialTheme = savedTheme || 'light';
+    setTheme(initialTheme);
+    if (initialTheme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, []);
+
+  const toggleTheme = () => {
+    const newTheme = theme === 'light' ? 'dark' : 'light';
+    setTheme(newTheme);
+    localStorage.setItem('theme', newTheme);
+    if (newTheme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  };
 
   // Tick the clock every 1 minute to auto-clear expired statuses
   useEffect(() => {
@@ -732,32 +755,44 @@ export default function HomePage() {
   };
 
   return (
-    <div className="min-h-screen bg-black text-white selection:bg-indigo-600 selection:text-white flex flex-col font-sans">
+    <div className="min-h-screen bg-zinc-50 dark:bg-black text-zinc-950 dark:text-white flex flex-col font-sans">
       {/* Background radial glow */}
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-indigo-950/20 via-zinc-950/45 to-black pointer-events-none z-0" />
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-indigo-100/30 dark:from-indigo-950/20 via-zinc-100/10 dark:via-zinc-950/45 to-transparent dark:to-black pointer-events-none z-0" />
 
       {/* HEADER */}
-      <header className="sticky top-0 z-50 border-b border-zinc-900 bg-zinc-950/80 backdrop-blur-md px-6 py-4 flex items-center justify-between">
+      <header className="sticky top-0 z-50 border-b border-zinc-200 dark:border-zinc-900 bg-zinc-200/90 dark:bg-zinc-950/80 backdrop-blur-md px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <IntradetectorLogo size="lg" showTagline={true} />
            {resolvedAlert && (
             <button
               onClick={() => setIsAlertDetailOpen(true)}
-              className="flex items-center gap-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/20 px-3 py-1.5 rounded-full transition-all duration-300 animate-pulse cursor-pointer group shadow-lg shadow-amber-500/5 ml-2"
+              className="flex items-center gap-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 border border-amber-500/20 px-3 py-1.5 rounded-full transition-all duration-300 animate-pulse cursor-pointer group shadow-lg shadow-amber-500/5 ml-2"
               title="Clique para ver detalhes do alerta de rede"
             >
-              <Icons.AlertTriangle className="h-4 w-4 text-amber-500 group-hover:scale-110 transition-transform" />
+              <Icons.AlertTriangle className="h-4 w-4 text-amber-600 group-hover:scale-110 transition-transform" />
               <span className="text-[10px] font-bold uppercase tracking-wider hidden sm:inline-block">Alerta de Rede</span>
             </button>
           )}
         </div>
 
-        <Link href="/admin">
-          <Button variant="outline" className="border-zinc-800 hover:bg-zinc-900 text-zinc-300 hover:text-white transition-all text-xs font-semibold gap-1.5 rounded-xl">
-            <Icons.Shield className="h-4 w-4" />
-            Painel Admin
+        <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={toggleTheme}
+            className="h-9 w-9 text-zinc-550 hover:text-black dark:text-zinc-400 dark:hover:text-white rounded-xl"
+            title="Alternar tema"
+          >
+            {theme === 'dark' ? <Icons.Sun className="h-4.5 w-4.5" /> : <Icons.Moon className="h-4.5 w-4.5" />}
           </Button>
-        </Link>
+
+          <Link href="/admin">
+            <Button variant="outline" className="border-zinc-300 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-900 text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white transition-all text-xs font-semibold gap-1.5 rounded-xl">
+              <Icons.Shield className="h-4 w-4" />
+              Painel Admin
+            </Button>
+          </Link>
+        </div>
       </header>
 
       {/* MAIN CONTAINER */}
@@ -765,16 +800,16 @@ export default function HomePage() {
         
         {/* HERO SECTION */}
         <section className="text-center space-y-4 max-w-2xl mx-auto py-4">
-          <h2 className="text-3xl md:text-5xl font-extrabold tracking-tight text-white leading-tight">
+          <h2 className="text-3xl md:text-5xl font-extrabold tracking-tight text-black dark:text-white leading-tight">
             Relatos de falhas em tempo real
           </h2>
         </section>
 
         {/* AREA CHART — report volume */}
         <section className="max-w-4xl mx-auto w-full">
-          <Card className="bg-zinc-950/60 border-zinc-900 backdrop-blur-sm overflow-hidden relative">
+          <Card className="bg-white/80 dark:bg-zinc-950/60 border-zinc-200 dark:border-zinc-900 shadow-sm backdrop-blur-sm overflow-hidden relative">
             {/* Red ambient glow */}
-            <div className="absolute -top-10 left-1/2 -translate-x-1/2 w-80 h-40 bg-red-600/10 rounded-full blur-3xl pointer-events-none" />
+            <div className="absolute -top-10 left-1/2 -translate-x-1/2 w-80 h-40 bg-red-500/5 dark:bg-red-600/10 rounded-full blur-3xl pointer-events-none" />
 
             <CardContent className="p-5 pt-4">
               {/* Header row */}
@@ -788,10 +823,10 @@ export default function HomePage() {
                       <Icons.Loader2 className="h-5 w-5 animate-spin text-red-500" />
                     ) : (
                       <>
-                        <span className="text-2xl font-extrabold text-white">{totalReportsInWindow}</span>
+                        <span className="text-2xl font-extrabold text-black dark:text-white">{totalReportsInWindow}</span>
                         <span className="text-xs text-zinc-500 font-medium">relatos</span>
                         {mostUnstable && (
-                          <span className="text-[10px] text-red-400 font-semibold flex items-center gap-1 ml-2">
+                          <span className="text-[10px] text-red-650 dark:text-red-400 font-semibold flex items-center gap-1 ml-2">
                             <Icons.Flame className="h-3 w-3" />
                             Pico: {mostUnstable.service.name}
                           </span>
@@ -823,14 +858,14 @@ export default function HomePage() {
                       </defs>
                       <XAxis
                         dataKey="hora"
-                        stroke="#52525b"
+                        stroke="#71717a"
                         fontSize={9}
                         tickLine={false}
                         axisLine={false}
                         interval={statusThresholds.chartWindowHours <= 4 ? 0 : statusThresholds.chartWindowHours <= 12 ? 2 : 3}
                       />
                       <YAxis
-                        stroke="#52525b"
+                        stroke="#71717a"
                         fontSize={9}
                         tickLine={false}
                         axisLine={false}
@@ -838,13 +873,13 @@ export default function HomePage() {
                       />
                       <Tooltip
                         contentStyle={{
-                          backgroundColor: '#09090b',
-                          borderColor: '#3f3f46',
+                          backgroundColor: theme === 'dark' ? '#09090b' : '#ffffff',
+                          borderColor: theme === 'dark' ? '#3f3f46' : '#e4e4e7',
                           borderRadius: '10px',
                           fontSize: '11px',
                         }}
-                        labelStyle={{ color: '#fff', fontWeight: 'bold' }}
-                        itemStyle={{ color: '#f87171' }}
+                        labelStyle={{ color: theme === 'dark' ? '#ffffff' : '#000000', fontWeight: 'bold' }}
+                        itemStyle={{ color: theme === 'dark' ? '#f87171' : '#dc2626' }}
                         formatter={(value) => [`${value ?? 0} relatos`, '']}
                       />
                       <Area
@@ -876,10 +911,10 @@ export default function HomePage() {
           </div>
         ) : (
           <div className="space-y-4">
-            <div className="flex items-center justify-between border-b border-zinc-900 pb-2">
+            <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-900 pb-2">
               <div className="flex items-center gap-2">
-                <span className="text-lg font-bold tracking-tight text-white">Todos os Serviços</span>
-                <Badge className="bg-zinc-900 text-zinc-400 border border-zinc-800 text-[10px] px-2 py-0.5 rounded-md">
+                <span className="text-lg font-bold tracking-tight text-black dark:text-white">Todos os Serviços</span>
+                <Badge className="bg-zinc-200 dark:bg-zinc-900 text-zinc-700 dark:text-zinc-400 border border-zinc-300 dark:border-zinc-800 text-[10px] px-2 py-0.5 rounded-md">
                   {sortedServices.length}
                 </Badge>
               </div>
@@ -892,13 +927,13 @@ export default function HomePage() {
                     placeholder="Buscar serviço..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="h-8 w-40 md:w-56 bg-zinc-900/50 border border-zinc-800 rounded-md px-3 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-all"
+                    className="h-8 w-40 md:w-56 bg-white dark:bg-zinc-900/50 border border-zinc-300 dark:border-zinc-800 rounded-md px-3 text-sm text-black dark:text-white placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-all"
                   />
                 )}
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-8 w-8 text-zinc-400 hover:text-white hover:bg-zinc-900"
+                  className="h-8 w-8 text-zinc-500 dark:text-zinc-400 hover:text-black dark:hover:text-white hover:bg-zinc-200 dark:hover:bg-zinc-900"
                   onClick={() => {
                     setIsSearchOpen(!isSearchOpen);
                     if (isSearchOpen) setSearchQuery('');
@@ -923,33 +958,33 @@ export default function HomePage() {
                 let statusColor = 'bg-emerald-500';
                 let glowColor = 'hover:border-emerald-500/30 hover:shadow-emerald-500/5';
                 let statusLabel = statusThresholds.labelNormal || 'Operando';
-                let badgeBg = 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20';
+                let badgeBg = 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-250/50 dark:border-emerald-500/20';
 
                 if (currentStatus === 'warning') {
                   statusColor = 'bg-amber-500';
                   glowColor = 'hover:border-amber-500/30 hover:shadow-amber-500/5';
                   statusLabel = statusThresholds.labelWarning || 'Instabilidade';
-                  badgeBg = 'bg-amber-500/10 text-amber-400 border-amber-500/20';
+                  badgeBg = 'bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-250/50 dark:border-emerald-500/20';
                 } else if (currentStatus === 'critical') {
                   statusColor = 'bg-red-500';
                   glowColor = 'hover:border-red-500/30 hover:shadow-red-500/5';
                   statusLabel = statusThresholds.labelCritical || 'Queda total';
-                  badgeBg = 'bg-red-500/10 text-red-400 border-red-500/20';
+                  badgeBg = 'bg-red-50 dark:bg-red-500/10 text-red-700 dark:text-red-400 border border-red-250/50 dark:border-red-500/20';
                 }
 
                 return (
                   <Card
                     key={service.id}
                     onClick={() => handleOpenReport(service)}
-                    className={`group cursor-pointer bg-zinc-950/45 border-zinc-900 transition-all duration-300 hover:translate-y-[-2px] hover:bg-zinc-950 hover:shadow-lg ${glowColor} border flex flex-col`}
+                    className={`group cursor-pointer bg-white dark:bg-zinc-950/45 border-zinc-200 dark:border-zinc-900 transition-all duration-300 hover:translate-y-[-2px] hover:bg-zinc-50 dark:hover:bg-zinc-950 hover:shadow-md dark:hover:shadow-lg ${glowColor} border flex flex-col`}
                   >
                     <CardContent className="p-5 flex-1 flex items-center justify-between">
                       <div className="flex items-center gap-3.5">
-                        <div className="bg-zinc-900 border border-zinc-800 p-2.5 rounded-xl text-zinc-300 group-hover:text-white transition-colors">
+                        <div className="bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-2.5 rounded-xl text-zinc-650 dark:text-zinc-300 group-hover:text-indigo-650 dark:group-hover:text-white transition-colors">
                           {getServiceIcon(service.icon_name, service.category)}
                         </div>
                         <div>
-                          <h3 className="font-bold text-white group-hover:text-indigo-400 transition-colors text-sm md:text-base">
+                          <h3 className="font-bold text-black dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors text-sm md:text-base">
                             {service.name}
                           </h3>
                           <span className="text-[11px] text-zinc-500">{service.category}</span>
@@ -965,7 +1000,7 @@ export default function HomePage() {
                             )}
                             <span className={`relative inline-flex rounded-full h-2 w-2 ${statusColor}`}></span>
                           </span>
-                          <span className="text-xs text-zinc-400 font-medium">{statusLabel}</span>
+                          <span className="text-xs text-zinc-700 dark:text-zinc-400 font-medium">{statusLabel}</span>
                         </div>
                         {/* Reports badge if any */}
                         {stats.count24h > 0 && (
@@ -989,7 +1024,7 @@ export default function HomePage() {
       </main>
 
       {/* FOOTER */}
-      <footer className="relative z-10 border-t border-zinc-900 bg-zinc-950 py-8 px-6 text-center text-xs text-zinc-500 max-w-7xl mx-auto w-full">
+      <footer className="relative z-10 border-t border-zinc-200 dark:border-zinc-900 bg-zinc-100 dark:bg-zinc-950 py-8 px-6 text-center text-xs text-zinc-650 dark:text-zinc-400 max-w-7xl mx-auto w-full">
         <p>&copy; {new Date().getFullYear()} Intradetector. Todos os direitos reservados.</p>
       </footer>
 
@@ -1007,20 +1042,20 @@ export default function HomePage() {
 
       {/* ACTIVE NETWORK ALERT DETAILS MODAL */}
       <Dialog open={isAlertDetailOpen} onOpenChange={(open) => !open && setIsAlertDetailOpen(false)}>
-        <DialogContent className="max-w-md w-full bg-zinc-950 border border-zinc-800 text-white rounded-2xl p-6 overflow-hidden">
+        <DialogContent className="max-w-md w-full bg-white border border-zinc-200 text-black rounded-2xl p-6 overflow-hidden shadow-xl">
           {/* Subtle red ambient glow inside modal */}
-          <div className="absolute -top-12 -left-12 w-32 h-32 bg-amber-500/10 rounded-full blur-2xl pointer-events-none" />
+          <div className="absolute -top-12 -left-12 w-32 h-32 bg-amber-500/5 rounded-full blur-2xl pointer-events-none" />
 
           {resolvedAlert && (
             <>
               <DialogHeader>
                 <div className="flex items-center gap-2 mb-2">
-                  <Badge variant="outline" className="border-amber-500/30 text-amber-400 text-[10px] uppercase font-bold tracking-widest flex gap-1 items-center bg-amber-500/5">
+                  <Badge variant="outline" className="border-amber-300 text-amber-700 text-[10px] uppercase font-bold tracking-widest flex gap-1 items-center bg-amber-50">
                     <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-ping mr-1" />
                     {resolvedAlert.alert_type}
                   </Badge>
                 </div>
-                <DialogTitle className="text-xl font-extrabold flex items-center gap-2 text-white leading-tight">
+                <DialogTitle className="text-xl font-extrabold flex items-center gap-2 text-black leading-tight">
                   <Icons.AlertTriangle className="h-5 w-5 text-amber-500 animate-bounce" />
                   <span>{resolvedAlert.title}</span>
                 </DialogTitle>
@@ -1030,19 +1065,19 @@ export default function HomePage() {
               </DialogHeader>
 
               <div className="mt-4 space-y-4 relative z-10">
-                <div className="bg-zinc-900/60 border border-zinc-850 rounded-xl p-4 text-zinc-300 text-sm leading-relaxed whitespace-pre-wrap">
+                <div className="bg-zinc-50 border border-zinc-200 rounded-xl p-4 text-zinc-800 text-sm leading-relaxed whitespace-pre-wrap">
                   {resolvedAlert.description}
                 </div>
 
-                <div className="bg-amber-500/5 border border-amber-500/10 rounded-xl p-3.5 flex items-start gap-3">
-                  <Icons.Info className="h-5 w-5 text-amber-400 shrink-0 mt-0.5" />
-                  <p className="text-[11px] text-amber-300/80 leading-snug">
+                <div className="bg-amber-50 border border-amber-200/50 rounded-xl p-3.5 flex items-start gap-3">
+                  <Icons.Info className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+                  <p className="text-[11px] text-amber-800 leading-snug">
                     <strong>Atenção Operadores:</strong> Registrem qualquer relato técnico de instabilidade correlacionado a este alerta para fins de auditoria e mapeamento de impacto.
                   </p>
                 </div>
               </div>
 
-              <div className="flex justify-end mt-6 pt-4 border-t border-zinc-900">
+              <div className="flex justify-end mt-6 pt-4 border-t border-zinc-200">
                 <Button
                   onClick={() => setIsAlertDetailOpen(false)}
                   className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-6 py-2 rounded-xl transition-all shadow-lg shadow-indigo-600/10 text-xs"

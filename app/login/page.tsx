@@ -14,6 +14,10 @@ import Link from 'next/link';
 export default function LoginPage() {
   const router = useRouter();
   const supabase = getSupabaseClient();
+
+  useEffect(() => {
+    document.documentElement.classList.add('dark');
+  }, []);
   
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
