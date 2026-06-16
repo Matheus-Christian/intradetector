@@ -1,15 +1,34 @@
 "use client"
 
-import { useTheme } from "next-themes"
+import { useEffect, useState } from "react"
 import { Toaster as Sonner, type ToasterProps } from "sonner"
 import { CircleCheckIcon, InfoIcon, TriangleAlertIcon, OctagonXIcon, Loader2Icon } from "lucide-react"
 
 const Toaster = ({ ...props }: ToasterProps) => {
-  const { theme = "system" } = useTheme()
+  const [activeTheme, setActiveTheme] = useState<"light" | "dark" | "system">("dark")
+
+  useEffect(() => {
+    // Determine the initial theme
+    const isDark = document.documentElement.classList.contains("dark")
+    setActiveTheme(isDark ? "dark" : "light")
+
+    // Set up a MutationObserver to listen for class name changes on the html tag
+    const observer = new MutationObserver(() => {
+      const isDarkNow = document.documentElement.classList.contains("dark")
+      setActiveTheme(isDarkNow ? "dark" : "light")
+    })
+
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["class"],
+    })
+
+    return () => observer.disconnect()
+  }, [])
 
   return (
     <Sonner
-      theme={theme as ToasterProps["theme"]}
+      theme={activeTheme}
       className="toaster group"
       icons={{
         success: (

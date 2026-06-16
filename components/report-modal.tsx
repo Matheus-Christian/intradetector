@@ -303,12 +303,12 @@ export default function ReportModal({
                   type="button"
                   onClick={() => setIsResolved(opt.value)}
                   className={cn(
-                    'flex-1 py-2 px-3 rounded-xl text-xs font-semibold border transition-all',
+                    'flex-1 py-2 px-3 rounded-xl text-xs font-semibold border transition-all duration-200',
                     isResolved === opt.value
                       ? opt.value === 'false'
-                        ? 'bg-red-50 border-red-350 text-red-700'
-                        : 'bg-emerald-50 border-emerald-350 text-emerald-700'
-                      : 'bg-white border-zinc-300 text-zinc-650 hover:border-zinc-400 hover:text-black'
+                        ? 'bg-red-600 border-red-650 text-white hover:bg-red-700 shadow-lg shadow-red-600/10'
+                        : 'bg-emerald-600 border-emerald-650 text-white hover:bg-emerald-700 shadow-lg shadow-emerald-600/10'
+                      : 'bg-zinc-50 border-zinc-250 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800'
                   )}
                 >
                   {opt.label}

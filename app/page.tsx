@@ -15,6 +15,8 @@ import IntradetectorLogo from '@/components/intradetector-logo';
 import {
   AreaChart,
   Area,
+  BarChart,
+  Bar,
   XAxis,
   YAxis,
   Tooltip,
@@ -365,11 +367,11 @@ export default function HomePage() {
       setIsAlertDetailOpen(true);
       toast.warning(
         <div className="flex flex-col gap-1">
-          <span className="font-bold text-amber-500 flex items-center gap-1.5">
+          <span className="font-bold text-amber-600 dark:text-amber-500 flex items-center gap-1.5">
             <Icons.AlertTriangle className="h-4 w-4 animate-bounce" />
             {resolvedAlert.title} ({resolvedAlert.alert_type})
           </span>
-          <span className="text-xs text-zinc-300">{resolvedAlert.description}</span>
+          <span className="text-xs text-zinc-650 dark:text-zinc-300">{resolvedAlert.description}</span>
         </div>,
         { duration: 8000 }
       );
@@ -757,6 +759,26 @@ export default function HomePage() {
     return reports.filter(r => new Date(r.created_at).getTime() >= cutoffTime).length;
   }, [reports, statusThresholds.chartWindowHours, currentTime]);
 
+  // Top 4 Access Points (regions) horizontal bar chart data
+  const accessPointChartData = useMemo(() => {
+    const windowHours = statusThresholds.chartWindowHours || 24;
+    const cutoffTime = Date.now() - windowHours * 60 * 60 * 1000;
+    
+    const reportsInWindow = reports.filter(r => new Date(r.created_at).getTime() >= cutoffTime);
+    const counts: Record<string, number> = {};
+
+    reportsInWindow.forEach(r => {
+      const accessPoint = r.region ?? r.custom_fields?.region;
+      if (!accessPoint) return;
+      counts[accessPoint] = (counts[accessPoint] || 0) + 1;
+    });
+
+    return Object.entries(counts)
+      .map(([name, count]) => ({ name, relatos: count }))
+      .sort((a, b) => b.relatos - a.relatos)
+      .slice(0, 4);
+  }, [reports, statusThresholds.chartWindowHours, currentTime]);
+
   const handleOpenReport = (service: Service) => {
     setSelectedService(service);
     setIsModalOpen(true);
@@ -774,10 +796,10 @@ export default function HomePage() {
            {resolvedAlert && (
             <button
               onClick={() => setIsAlertDetailOpen(true)}
-              className="flex items-center gap-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 border border-amber-500/20 px-3 py-1.5 rounded-full transition-all duration-300 animate-pulse cursor-pointer group shadow-lg shadow-amber-500/5 ml-2"
+              className="flex items-center gap-2 bg-amber-100 dark:bg-amber-500/10 hover:bg-amber-200 dark:hover:bg-amber-500/20 text-amber-850 dark:text-amber-400 border border-amber-300 dark:border-amber-500/20 px-3 py-1.5 rounded-full transition-all duration-300 animate-pulse cursor-pointer group shadow-lg shadow-amber-500/5 ml-2"
               title="Clique para ver detalhes do alerta de rede"
             >
-              <Icons.AlertTriangle className="h-4 w-4 text-amber-600 group-hover:scale-110 transition-transform" />
+              <Icons.AlertTriangle className="h-4 w-4 text-amber-700 dark:text-amber-500 group-hover:scale-110 transition-transform" />
               <span className="text-[10px] font-bold uppercase tracking-wider hidden sm:inline-block">Alerta de Rede</span>
             </button>
           )}
@@ -813,8 +835,9 @@ export default function HomePage() {
           </h2>
         </section>
 
-        {/* AREA CHART — report volume */}
-        <section className="max-w-4xl mx-auto w-full">
+        {/* CHARTS — report volume & access points */}
+        <section className="max-w-4xl mx-auto w-full grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Card 1: Area Chart */}
           <Card className="bg-white/80 dark:bg-zinc-950/60 border-zinc-200 dark:border-zinc-900 shadow-sm backdrop-blur-sm overflow-hidden relative">
             {/* Red ambient glow */}
             <div className="absolute -top-10 left-1/2 -translate-x-1/2 w-80 h-40 bg-red-500/5 dark:bg-red-600/10 rounded-full blur-3xl pointer-events-none" />
@@ -900,6 +923,98 @@ export default function HomePage() {
                         activeDot={{ r: 4, fill: '#ef4444', strokeWidth: 0 }}
                       />
                     </AreaChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="h-full flex items-center justify-center">
+                    <Icons.Loader2 className="h-6 w-6 animate-spin text-red-500/50" />
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Card 2: Access Points Bar Chart */}
+          <Card className="bg-white/80 dark:bg-zinc-950/60 border-zinc-200 dark:border-zinc-900 shadow-sm backdrop-blur-sm overflow-hidden relative flex flex-col justify-between">
+            {/* Red ambient glow */}
+            <div className="absolute -top-10 left-1/2 -translate-x-1/2 w-80 h-40 bg-red-500/5 dark:bg-red-600/10 rounded-full blur-3xl pointer-events-none" />
+
+            <CardContent className="p-5 pt-4 flex-1 flex flex-col justify-between">
+              {/* Header row */}
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <p className="text-zinc-500 text-[10px] font-semibold uppercase tracking-widest">
+                    Pontos de Acesso — Últimas {statusThresholds.chartWindowHours || 24}h
+                  </p>
+                  <div className="flex items-baseline gap-2 mt-0.5">
+                    <span className="text-2xl font-extrabold text-black dark:text-white">Top 4</span>
+                    <span className="text-xs text-zinc-500 font-medium">meios mais afetados</span>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1.5">
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-60" />
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
+                  </span>
+                  <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-semibold">Realtime</span>
+                </div>
+              </div>
+
+              {/* Bar Chart */}
+              <div className="h-36 flex-1 min-h-[144px]">
+                {isLoading ? (
+                  <div className="h-full flex items-center justify-center">
+                    <Icons.Loader2 className="h-6 w-6 animate-spin text-red-500" />
+                  </div>
+                ) : isMounted && accessPointChartData.length === 0 ? (
+                  <div className="h-full flex flex-col items-center justify-center text-center text-zinc-400 dark:text-zinc-500 gap-1.5">
+                    <Icons.CheckCircle2 className="h-6 w-6 text-emerald-500 animate-pulse" />
+                    <span className="text-[10px] font-bold uppercase tracking-wider">Tudo normal na rede</span>
+                    <span className="text-[9px] text-zinc-500">Nenhuma falha de conexão relatada</span>
+                  </div>
+                ) : isMounted ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                      data={accessPointChartData}
+                      layout="vertical"
+                      margin={{ top: 0, right: 10, left: 10, bottom: 0 }}
+                    >
+                      <defs>
+                        <linearGradient id="barRedGradient" x1="0" y1="0" x2="1" y2="0">
+                          <stop offset="5%" stopColor="#ef4444" stopOpacity={0.4} />
+                          <stop offset="95%" stopColor="#ef4444" stopOpacity={0.05} />
+                        </linearGradient>
+                      </defs>
+                      <XAxis type="number" hide />
+                      <YAxis
+                        dataKey="name"
+                        type="category"
+                        stroke="#71717a"
+                        fontSize={9}
+                        tickLine={false}
+                        axisLine={false}
+                        width={110}
+                      />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: theme === 'dark' ? '#09090b' : '#ffffff',
+                          borderColor: theme === 'dark' ? '#3f3f46' : '#e4e4e7',
+                          borderRadius: '10px',
+                          fontSize: '11px',
+                        }}
+                        labelStyle={{ color: theme === 'dark' ? '#ffffff' : '#000000', fontWeight: 'bold' }}
+                        itemStyle={{ color: theme === 'dark' ? '#f87171' : '#dc2626' }}
+                        formatter={(value) => [`${value ?? 0} relatos`, '']}
+                      />
+                      <Bar
+                        dataKey="relatos"
+                        fill="url(#barRedGradient)"
+                        stroke="#ef4444"
+                        strokeWidth={1}
+                        radius={[0, 4, 4, 0]}
+                        barSize={12}
+                      />
+                    </BarChart>
                   </ResponsiveContainer>
                 ) : (
                   <div className="h-full flex items-center justify-center">

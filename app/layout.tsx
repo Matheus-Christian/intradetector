@@ -26,7 +26,7 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col bg-black text-foreground antialiased">
         {children}
-        <Toaster theme="dark" closeButton />
+        <Toaster closeButton />
       </body>
     </html>
   );
