@@ -218,6 +218,14 @@ export default function HomePage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
 
+  // Pagination State
+  const [visibleCount, setVisibleCount] = useState(39);
+
+  // Reset pagination when search query changes
+  useEffect(() => {
+    setVisibleCount(39);
+  }, [searchQuery]);
+
   // Auto-refresh clock for stats recalculation
   const [currentTime, setCurrentTime] = useState(Date.now());
 
@@ -910,7 +918,7 @@ export default function HomePage() {
             <span className="text-zinc-500 text-sm">Carregando painel de serviços...</span>
           </div>
         ) : (
-          <div className="space-y-4">
+          <div className="space-y-4 max-w-5xl mx-auto w-full">
             <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-900 pb-2">
               <div className="flex items-center gap-2">
                 <span className="text-lg font-bold tracking-tight text-black dark:text-white">Todos os Serviços</span>
@@ -944,81 +952,102 @@ export default function HomePage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-              {sortedServices
-                .filter(s => 
-                  s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                  (s.category && s.category.toLowerCase().includes(searchQuery.toLowerCase()))
-                )
-                .map((service) => {
-                const stats = serviceStats[service.id] || { count24h: 0, count30m: 0, status: 'normal' };
-                const currentStatus = stats.status;
-                
-                // Render styling depending on dynamic status
-                let statusColor = 'bg-emerald-500';
-                let glowColor = 'hover:border-emerald-500/30 hover:shadow-emerald-500/5';
-                let statusLabel = statusThresholds.labelNormal || 'Operando';
-                let badgeBg = 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-250/50 dark:border-emerald-500/20';
+            {(() => {
+              const filtered = sortedServices.filter(s => 
+                s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                (s.category && s.category.toLowerCase().includes(searchQuery.toLowerCase()))
+              );
+              const displayed = filtered.slice(0, visibleCount);
+              const hasMore = filtered.length > visibleCount;
 
-                if (currentStatus === 'warning') {
-                  statusColor = 'bg-amber-500';
-                  glowColor = 'hover:border-amber-500/30 hover:shadow-amber-500/5';
-                  statusLabel = statusThresholds.labelWarning || 'Instabilidade';
-                  badgeBg = 'bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-250/50 dark:border-emerald-500/20';
-                } else if (currentStatus === 'critical') {
-                  statusColor = 'bg-red-500';
-                  glowColor = 'hover:border-red-500/30 hover:shadow-red-500/5';
-                  statusLabel = statusThresholds.labelCritical || 'Queda total';
-                  badgeBg = 'bg-red-50 dark:bg-red-500/10 text-red-700 dark:text-red-400 border border-red-250/50 dark:border-red-500/20';
-                }
+              return (
+                <>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                    {displayed.map((service) => {
+                      const stats = serviceStats[service.id] || { count24h: 0, count30m: 0, status: 'normal' };
+                      const currentStatus = stats.status;
+                      
+                      // Render styling depending on dynamic status
+                      let statusColor = 'bg-emerald-500';
+                      let glowColor = 'hover:border-emerald-500/30 hover:shadow-emerald-500/5';
+                      let statusLabel = statusThresholds.labelNormal || 'Operando';
+                      let badgeBg = 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-250/50 dark:border-emerald-500/20';
 
-                return (
-                  <Card
-                    key={service.id}
-                    onClick={() => handleOpenReport(service)}
-                    className={`group cursor-pointer bg-white dark:bg-zinc-950/45 border-zinc-200 dark:border-zinc-900 transition-all duration-300 hover:translate-y-[-2px] hover:bg-zinc-50 dark:hover:bg-zinc-950 hover:shadow-md dark:hover:shadow-lg ${glowColor} border flex flex-col`}
-                  >
-                    <CardContent className="p-5 flex-1 flex items-center justify-between">
-                      <div className="flex items-center gap-3.5">
-                        <div className="bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-2.5 rounded-xl text-zinc-650 dark:text-zinc-300 group-hover:text-indigo-650 dark:group-hover:text-white transition-colors">
-                          {getServiceIcon(service.icon_name, service.category)}
-                        </div>
-                        <div>
-                          <h3 className="font-bold text-black dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors text-sm md:text-base">
-                            {service.name}
-                          </h3>
-                          <span className="text-[11px] text-zinc-500">{service.category}</span>
-                        </div>
-                      </div>
+                      if (currentStatus === 'warning') {
+                        statusColor = 'bg-amber-500';
+                        glowColor = 'hover:border-amber-500/30 hover:shadow-amber-500/5';
+                        statusLabel = statusThresholds.labelWarning || 'Instabilidade';
+                        badgeBg = 'bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-250/50 dark:border-emerald-500/20';
+                      } else if (currentStatus === 'critical') {
+                        statusColor = 'bg-red-500';
+                        glowColor = 'hover:border-red-500/30 hover:shadow-red-500/5';
+                        statusLabel = statusThresholds.labelCritical || 'Queda total';
+                        badgeBg = 'bg-red-50 dark:bg-red-500/10 text-red-700 dark:text-red-400 border border-red-250/50 dark:border-red-500/20';
+                      }
 
-                      <div className="flex flex-col items-end gap-1.5">
-                        {/* Glowing Status Dot */}
-                        <div className="flex items-center gap-1.5">
-                          <span className="relative flex h-2 w-2">
-                            {currentStatus !== 'normal' && (
-                              <span className={`animate-ping absolute inline-flex h-full w-full rounded-full ${statusColor} opacity-75`}></span>
-                            )}
-                            <span className={`relative inline-flex rounded-full h-2 w-2 ${statusColor}`}></span>
-                          </span>
-                          <span className="text-xs text-zinc-700 dark:text-zinc-400 font-medium">{statusLabel}</span>
-                        </div>
-                        {/* Reports badge if any */}
-                        {stats.count24h > 0 && (
-                          <Badge className={`${badgeBg} text-[9px] px-1.5 py-0.5 rounded-md`}>
-                            {stats.count24h} relatos (24h)
-                          </Badge>
-                        )}
-                      </div>
-                    </CardContent>
+                      return (
+                        <Card
+                          key={service.id}
+                          onClick={() => handleOpenReport(service)}
+                          className={`group cursor-pointer bg-white dark:bg-zinc-950/45 border-zinc-200 dark:border-zinc-900 transition-all duration-300 hover:translate-y-[-2px] hover:bg-zinc-50 dark:hover:bg-zinc-950 hover:shadow-md dark:hover:shadow-lg ${glowColor} border flex flex-col`}
+                        >
+                          <CardContent className="p-5 flex-1 flex items-center justify-between">
+                            <div className="flex items-center gap-3.5">
+                              <div className="bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-2.5 rounded-xl text-zinc-650 dark:text-zinc-300 group-hover:text-indigo-650 dark:group-hover:text-white transition-colors">
+                                {getServiceIcon(service.icon_name, service.category)}
+                              </div>
+                              <div>
+                                <h3 className="font-bold text-black dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors text-sm md:text-base">
+                                  {service.name}
+                                </h3>
+                                <span className="text-[11px] text-zinc-500">{service.category}</span>
+                              </div>
+                            </div>
 
-                    {/* Ping Real-time Monitor */}
-                    {service.ping_enabled && (
-                      <ServicePing service={service} config={pingConfig} />
-                    )}
-                  </Card>
-                );
-              })}
-            </div>
+                            <div className="flex flex-col items-end gap-1.5">
+                              {/* Glowing Status Dot */}
+                              <div className="flex items-center gap-1.5">
+                                <span className="relative flex h-2 w-2">
+                                  {currentStatus !== 'normal' && (
+                                    <span className={`animate-ping absolute inline-flex h-full w-full rounded-full ${statusColor} opacity-75`}></span>
+                                  )}
+                                  <span className={`relative inline-flex rounded-full h-2 w-2 ${statusColor}`}></span>
+                                </span>
+                                <span className="text-xs text-zinc-700 dark:text-zinc-400 font-medium">{statusLabel}</span>
+                              </div>
+                              {/* Reports badge if any */}
+                              {stats.count24h > 0 && (
+                                <Badge className={`${badgeBg} text-[9px] px-1.5 py-0.5 rounded-md`}>
+                                  {stats.count24h} relatos (24h)
+                                </Badge>
+                              )}
+                            </div>
+                          </CardContent>
+
+                          {/* Ping Real-time Monitor */}
+                          {service.ping_enabled && (
+                            <ServicePing service={service} config={pingConfig} />
+                          )}
+                        </Card>
+                      );
+                    })}
+                  </div>
+
+                  {hasMore && (
+                    <div className="flex justify-center mt-8">
+                      <Button
+                        onClick={() => setVisibleCount(prev => prev + 21)}
+                        variant="outline"
+                        className="border-zinc-300 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-900 text-zinc-700 dark:text-zinc-300 hover:text-indigo-600 dark:hover:text-indigo-400 font-semibold px-8 py-2.5 rounded-xl transition-all text-xs gap-1.5 flex items-center group"
+                      >
+                        <Icons.ChevronDown className="h-4 w-4 transition-transform group-hover:translate-y-0.5" />
+                        Carregar mais ({filtered.length - visibleCount} restantes)
+                      </Button>
+                    </div>
+                  )}
+                </>
+              );
+            })()}
           </div>
         )}
       </main>
