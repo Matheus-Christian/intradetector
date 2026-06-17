@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { getSupabaseClient } from '@/lib/supabase';
 import { Service, Report, Setting, FormSchema, ServiceStatus, PingConfig } from '@/lib/types';
 import { Card, CardContent } from '@/components/ui/card';
@@ -365,19 +365,29 @@ export default function HomePage() {
     return () => clearInterval(interval);
   }, []);
 
+  const resolvedAlertRef = useRef(resolvedAlert);
+  useEffect(() => {
+    resolvedAlertRef.current = resolvedAlert;
+  }, [resolvedAlert]);
+
+  const resolvedAlertId = resolvedAlert?.id;
+
   // Periodic Alert Triggering
   useEffect(() => {
-    if (!resolvedAlert) return;
+    const currentAlert = resolvedAlertRef.current;
+    if (!currentAlert) return;
 
     const showAlertMessage = () => {
+      const alert = resolvedAlertRef.current;
+      if (!alert) return;
       setIsAlertDetailOpen(true);
       toast.warning(
         <div className="flex flex-col gap-1">
           <span className="font-bold text-amber-600 dark:text-amber-500 flex items-center gap-1.5">
             <Icons.AlertTriangle className="h-4 w-4 animate-bounce" />
-            {resolvedAlert.title} ({resolvedAlert.alert_type})
+            {alert.title} ({alert.alert_type})
           </span>
-          <span className="text-xs text-zinc-650 dark:text-zinc-300">{resolvedAlert.description}</span>
+          <span className="text-xs text-zinc-650 dark:text-zinc-300">{alert.description}</span>
         </div>,
         { duration: 8000 }
       );
@@ -396,7 +406,7 @@ export default function HomePage() {
       clearTimeout(timer);
       clearInterval(interval);
     };
-  }, [resolvedAlert, displayInterval]);
+  }, [resolvedAlertId, displayInterval]);
 
   // Auto-close alert popup after configured seconds
   useEffect(() => {
