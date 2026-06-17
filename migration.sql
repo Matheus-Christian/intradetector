@@ -105,8 +105,8 @@ BEGIN
       'description', alert_desc,
       'is_active', TRUE,
       'expires_at', NULL,
-      'created_at', timezone('utc'::text, now()),
-      'updated_at', timezone('utc'::text, now()),
+      'created_at', to_char(timezone('utc'::text, now()), 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
+      'updated_at', to_char(timezone('utc'::text, now()), 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
       'is_auto', TRUE
     );
     
@@ -128,7 +128,7 @@ BEGIN
     FOR item IN SELECT * FROM jsonb_array_elements(current_alerts) LOOP
       IF (item->>'is_active')::boolean = TRUE AND (item->>'alert_type') = 'Detecção Automática' THEN
         -- Modificar o alerta para inativo
-        item := item || jsonb_build_object('is_active', FALSE, 'updated_at', timezone('utc'::text, now()));
+        item := item || jsonb_build_object('is_active', FALSE, 'updated_at', to_char(timezone('utc'::text, now()), 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'));
       END IF;
       updated_alerts := updated_alerts || jsonb_build_array(item);
     END LOOP;

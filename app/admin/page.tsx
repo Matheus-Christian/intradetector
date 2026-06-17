@@ -62,6 +62,12 @@ import Link from 'next/link';
 import IntradetectorLogo from '@/components/intradetector-logo';
 import FormBuilder from '@/components/form-builder';
 
+const parseUTCDate = (dateStr: string | null | undefined): number => {
+  if (!dateStr) return 0;
+  const hasTimezone = /[Zz]$|[-+]\d{2}:?\d{2}$/.test(dateStr);
+  return new Date(hasTimezone ? dateStr : dateStr + 'Z').getTime();
+};
+
 const AVAILABLE_CATEGORIES = ['Redes Sociais', 'Streaming', 'Jogos', 'IPTV & Provedores'];
 const COMMON_ICONS = [
   { value: 'MessageSquare', label: 'Mensagens / Social' },
@@ -257,7 +263,7 @@ export default function AdminPage() {
 
   const hasActiveManualAlert = useMemo(() => {
     return networkAlerts.some((a: any) => {
-      const isExpired = a.expires_at && new Date(a.expires_at).getTime() < Date.now();
+      const isExpired = a.expires_at && parseUTCDate(a.expires_at) < Date.now();
       return a.is_active && !isExpired;
     });
   }, [networkAlerts]);
@@ -407,6 +413,10 @@ export default function AdminPage() {
         setAutoAlertTitle(alertConfigSettingData.value?.autoTitle ?? 'Detecção Automática de Instabilidade');
         setAutoAlertDescription(alertConfigSettingData.value?.autoDescription ?? 'Alto volume de relatos detectado na rede pública.');
         setLastManualAlertInactiveAt(alertConfigSettingData.value?.lastManualAlertInactiveAt ?? null);
+        
+        if (alertConfigSettingData.value?.windowMinutes !== undefined) {
+          setThresholdWindow(alertConfigSettingData.value.windowMinutes);
+        }
       }
 
       // Fetch dynamic service categories
@@ -930,7 +940,7 @@ export default function AdminPage() {
     e.preventDefault();
     setIsSavingAlertsConfig(true);
     try {
-      const { error } = await supabase
+      const { error: errorConfig } = await supabase
         .from('settings')
         .upsert({
           key: 'network_alert_config',
@@ -942,13 +952,35 @@ export default function AdminPage() {
             autoMinReports: autoAlertMinReports,
             autoTitle: autoAlertTitle,
             autoDescription: autoAlertDescription,
-            lastManualAlertInactiveAt
+            lastManualAlertInactiveAt,
+            windowMinutes: thresholdWindow
           },
           updated_at: new Date().toISOString()
         });
 
-      if (error) throw error;
-      await logAction('Configurar Alertas', `Intervalo: ${displayInterval}m, Auto-fechar: ${autoCloseInterval}s, Auto-Habilitado: ${autoAlertEnabled}`);
+      if (errorConfig) throw errorConfig;
+
+      // Sync to status_thresholds for consistency
+      const { data: thresholdsData } = await supabase
+        .from('settings')
+        .select('*')
+        .eq('key', 'status_thresholds')
+        .single();
+        
+      if (thresholdsData) {
+        await supabase
+          .from('settings')
+          .upsert({
+            key: 'status_thresholds',
+            value: {
+              ...thresholdsData.value,
+              windowMinutes: thresholdWindow
+            },
+            updated_at: new Date().toISOString()
+          });
+      }
+
+      await logAction('Configurar Alertas', `Intervalo: ${displayInterval}m, Auto-fechar: ${autoCloseInterval}s, Auto-Habilitado: ${autoAlertEnabled}, Janela: ${thresholdWindow}m`);
       toast.success('Configurações de alerta salvas!');
     } catch (err: any) {
       toast.error(`Erro ao salvar: ${err.message}`);
@@ -1073,7 +1105,7 @@ export default function AdminPage() {
 
       if (error) throw error;
 
-      const isExpired = alertToDelete.expires_at && new Date(alertToDelete.expires_at).getTime() < Date.now();
+      const isExpired = alertToDelete.expires_at && parseUTCDate(alertToDelete.expires_at) < Date.now();
       const wasActive = alertToDelete.is_active && !isExpired;
 
       if (wasActive) {
@@ -1453,12 +1485,12 @@ export default function AdminPage() {
   const reportsCountPerAlert = useMemo(() => {
     const counts: Record<string, number> = {};
     networkAlerts.forEach(alert => {
-      const start = new Date(alert.created_at).getTime();
+      const start = parseUTCDate(alert.created_at);
       let end = Date.now();
       if (alert.expires_at) {
-        end = new Date(alert.expires_at).getTime();
+        end = parseUTCDate(alert.expires_at);
       } else if (!alert.is_active) {
-        end = new Date(alert.updated_at || alert.created_at).getTime();
+        end = parseUTCDate(alert.updated_at || alert.created_at);
       }
       
       const count = reports.filter(r => {
@@ -1483,12 +1515,12 @@ export default function AdminPage() {
     return reports.filter(r => {
       const rTime = new Date(r.created_at).getTime();
       return selectedAlerts.some(alert => {
-        const start = new Date(alert.created_at).getTime();
+        const start = parseUTCDate(alert.created_at);
         let end = Date.now();
         if (alert.expires_at) {
-          end = new Date(alert.expires_at).getTime();
+          end = parseUTCDate(alert.expires_at);
         } else if (!alert.is_active) {
-          end = new Date(alert.updated_at || alert.created_at).getTime();
+          end = parseUTCDate(alert.updated_at || alert.created_at);
         }
         return rTime >= start && rTime <= end;
       });
@@ -2279,8 +2311,8 @@ export default function AdminPage() {
                               </TableHeader>
                               <TableBody>
                                 {networkAlerts.map((alert) => {
-                                  const createdDate = new Date(alert.created_at).toLocaleString('pt-BR');
-                                  const isExpired = alert.expires_at && new Date(alert.expires_at).getTime() < Date.now();
+                                  const createdDate = new Date(parseUTCDate(alert.created_at)).toLocaleString('pt-BR');
+                                  const isExpired = alert.expires_at && parseUTCDate(alert.expires_at) < Date.now();
                                   const isActive = alert.is_active && !isExpired;
                                   const count = reportsCountPerAlert[alert.id] || 0;
                                   const isSelected = selectedAlertIds.includes(alert.id);
@@ -2328,9 +2360,9 @@ export default function AdminPage() {
                                           <div>
                                             <span className="text-zinc-500 text-[10px]">Término:</span>{' '}
                                             {alert.expires_at ? (
-                                              new Date(alert.expires_at).toLocaleString('pt-BR')
+                                              new Date(parseUTCDate(alert.expires_at)).toLocaleString('pt-BR')
                                             ) : !alert.is_active ? (
-                                              new Date(alert.updated_at || alert.created_at).toLocaleString('pt-BR')
+                                              new Date(parseUTCDate(alert.updated_at || alert.created_at)).toLocaleString('pt-BR')
                                             ) : (
                                               <span className="text-emerald-400 font-semibold">Ativo (em vigência)</span>
                                             )}
@@ -2578,12 +2610,12 @@ export default function AdminPage() {
                                     
                                     // Find matching selected alerts whose active period includes this report
                                     const matchingAlerts = selectedAlerts.filter(alert => {
-                                      const start = new Date(alert.created_at).getTime();
+                                      const start = parseUTCDate(alert.created_at);
                                       let end = Date.now();
                                       if (alert.expires_at) {
-                                        end = new Date(alert.expires_at).getTime();
+                                        end = parseUTCDate(alert.expires_at);
                                       } else if (!alert.is_active) {
-                                        end = new Date(alert.updated_at || alert.created_at).getTime();
+                                        end = parseUTCDate(alert.updated_at || alert.created_at);
                                       }
                                       const rTime = new Date(report.created_at).getTime();
                                       return rTime >= start && rTime <= end;
@@ -3094,22 +3126,7 @@ export default function AdminPage() {
                     </CardHeader>
                     <CardContent>
                       <form onSubmit={handleSaveThresholds} className="space-y-6">
-                        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                          {/* Window Minutes */}
-                          <div className="space-y-2">
-                            <Label htmlFor="windowMinutes" className="text-zinc-700 dark:text-zinc-300 font-semibold text-sm">Janela de Tempo (Minutos)</Label>
-                            <Input
-                              id="windowMinutes"
-                              type="number"
-                              min={1}
-                              value={thresholdWindow}
-                              onChange={(e) => setThresholdWindow(Number(e.target.value))}
-                              className="bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-300 dark:border-zinc-800 text-zinc-950 dark:text-white focus:border-indigo-500"
-                              disabled={!hasWriteAccess('alerts')}
-                              required
-                            />
-                            <p className="text-xs text-zinc-500">Janela de criticidade de {thresholdWindow} min.</p>
-                          </div>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
 
                           {/* Warning Limit */}
                           <div className="space-y-2">
@@ -3259,7 +3276,7 @@ export default function AdminPage() {
                     </CardHeader>
                     <CardContent>
                       <form onSubmit={handleSaveAlertConfig} className="space-y-4">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                           <div className="space-y-2">
                             <Label htmlFor="displayInterval" className="text-zinc-700 dark:text-zinc-300 font-semibold text-sm">
                               Intervalo de Exibição (Minutos)
@@ -3295,6 +3312,25 @@ export default function AdminPage() {
                             />
                             <p className="text-xs text-zinc-555 mt-1">
                               O alerta irá fechar automaticamente após {autoCloseInterval} segundos (use 0 para desabilitar).
+                            </p>
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label htmlFor="windowMinutes" className="text-zinc-700 dark:text-zinc-300 font-semibold text-sm">
+                              Janela de Tempo (Minutos)
+                            </Label>
+                            <Input
+                              id="windowMinutes"
+                              type="number"
+                              min={1}
+                              value={thresholdWindow}
+                              onChange={(e) => setThresholdWindow(Number(e.target.value))}
+                              className="bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-300 dark:border-zinc-800 text-zinc-950 dark:text-white focus:border-indigo-500"
+                              disabled={!hasWriteAccess('alerts')}
+                              required
+                            />
+                            <p className="text-xs text-zinc-555 mt-1">
+                              Janela de agrupamento e criticidade de relatos ({thresholdWindow} min).
                             </p>
                           </div>
                         </div>
@@ -3530,10 +3566,10 @@ export default function AdminPage() {
                             </TableHeader>
                             <TableBody>
                               {networkAlerts.map((alert) => {
-                                const createdDate = new Date(alert.created_at).toLocaleString('pt-BR');
+                                const createdDate = new Date(parseUTCDate(alert.created_at)).toLocaleString('pt-BR');
                                 
                                 // Check if expired
-                                const isExpired = alert.expires_at && new Date(alert.expires_at).getTime() < Date.now();
+                                const isExpired = alert.expires_at && parseUTCDate(alert.expires_at) < Date.now();
                                 const isActive = alert.is_active && !isExpired;
 
                                 return (
@@ -3554,7 +3590,7 @@ export default function AdminPage() {
                                       {alert.alert_type === 'Detecção Automática' ? (
                                         <span className="text-indigo-650 dark:text-indigo-400 font-semibold">Automático</span>
                                       ) : alert.expires_at ? (
-                                        <span>Expirará: {new Date(alert.expires_at).toLocaleString('pt-BR')}</span>
+                                        <span>Expirará: {new Date(parseUTCDate(alert.expires_at)).toLocaleString('pt-BR')}</span>
                                       ) : (
                                         <span className="text-zinc-500">Desativação manual</span>
                                       )}

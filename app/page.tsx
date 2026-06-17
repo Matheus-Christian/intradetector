@@ -23,6 +23,12 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 
+const parseUTCDate = (dateStr: string | null | undefined): number => {
+  if (!dateStr) return 0;
+  const hasTimezone = /[Zz]$|[-+]\d{2}:?\d{2}$/.test(dateStr);
+  return new Date(hasTimezone ? dateStr : dateStr + 'Z').getTime();
+};
+
 // Icon mapper helper
 function getServiceIcon(iconName: string, category: string) {
   const IconComponent = (Icons as any)[iconName];
@@ -252,17 +258,17 @@ export default function HomePage() {
     
     // 1. From database config lastManualAlertInactiveAt
     if (alertConfig?.lastManualAlertInactiveAt) {
-      maxTime = Math.max(maxTime, new Date(alertConfig.lastManualAlertInactiveAt).getTime());
+      maxTime = Math.max(maxTime, parseUTCDate(alertConfig.lastManualAlertInactiveAt));
     }
     
     // 2. From all alerts in networkAlerts that are inactive or expired
     networkAlerts.forEach((a: any) => {
-      const isExpired = a.expires_at && new Date(a.expires_at).getTime() < Date.now();
+      const isExpired = a.expires_at && parseUTCDate(a.expires_at) < Date.now();
       if (!a.is_active) {
-        const end = new Date(a.updated_at || a.created_at).getTime();
+        const end = parseUTCDate(a.updated_at || a.created_at);
         if (end > maxTime) maxTime = end;
       } else if (isExpired) {
-        const end = new Date(a.expires_at).getTime();
+        const end = parseUTCDate(a.expires_at);
         if (end > maxTime) maxTime = end;
       }
     });
@@ -425,17 +431,22 @@ export default function HomePage() {
           });
         } else {
           // Se normalizado, desativa qualquer alerta automático ativo na tabela
-          const hasActiveAutoInDb = networkAlerts.some((a: any) => {
-            const isExpired = a.expires_at && new Date(a.expires_at).getTime() < Date.now();
+          const activeAuto = networkAlerts.find((a: any) => {
+            const isExpired = a.expires_at && parseUTCDate(a.expires_at) < Date.now();
             return a.is_active && !isExpired && a.alert_type === 'Detecção Automática';
           });
           
-          if (hasActiveAutoInDb) {
-            await supabase.rpc('manage_auto_alert', {
-              trigger_active: false,
-              alert_title: '',
-              alert_desc: ''
-            });
+          if (activeAuto) {
+            // Apenas desativa se respeitar a janela de tempo configurada (mínimo de windowMinutes ativo)
+            const activeDurationMs = Date.now() - parseUTCDate(activeAuto.created_at);
+            const windowMs = statusThresholds.windowMinutes * 60 * 1000;
+            if (activeDurationMs >= windowMs) {
+              await supabase.rpc('manage_auto_alert', {
+                trigger_active: false,
+                alert_title: '',
+                alert_desc: ''
+              });
+            }
           }
         }
       } catch (err) {
@@ -444,7 +455,7 @@ export default function HomePage() {
     };
 
     syncAutoAlert();
-  }, [isAutoAlertTriggered, alertConfig, activeAlert, networkAlerts, supabase]);
+  }, [isAutoAlertTriggered, alertConfig, activeAlert, networkAlerts, statusThresholds, supabase]);
 
   // Fetch initial data
   const fetchData = async () => {
@@ -509,7 +520,7 @@ export default function HomePage() {
           
           // Find the active alert that has not expired
           const active = alertsList.find((a: any) => {
-            const isExpired = a.expires_at && new Date(a.expires_at).getTime() < Date.now();
+            const isExpired = a.expires_at && parseUTCDate(a.expires_at) < Date.now();
             return a.is_active && !isExpired;
           });
           setActiveAlert(active || null);
@@ -520,6 +531,13 @@ export default function HomePage() {
           setAlertConfig(alertConfigSetting.value);
           setDisplayInterval(alertConfigSetting.value?.displayInterval ?? 10);
           setAutoCloseInterval(alertConfigSetting.value?.autoCloseInterval ?? 60);
+          
+          if (alertConfigSetting.value?.windowMinutes !== undefined) {
+            setStatusThresholds(prev => ({
+              ...prev,
+              windowMinutes: alertConfigSetting.value.windowMinutes
+            }));
+          }
         }
 
         const pingConfigSetting = settingsData.find(s => s.key === 'ping_config');
@@ -595,7 +613,7 @@ export default function HomePage() {
             const alertsList = updatedSetting.value || [];
             setNetworkAlerts(alertsList);
             const active = alertsList.find((a: any) => {
-              const isExpired = a.expires_at && new Date(a.expires_at).getTime() < Date.now();
+              const isExpired = a.expires_at && parseUTCDate(a.expires_at) < Date.now();
               return a.is_active && !isExpired;
             });
             setActiveAlert(active || null);
@@ -605,6 +623,13 @@ export default function HomePage() {
             setAlertConfig(updatedSetting.value);
             setDisplayInterval(updatedSetting.value?.displayInterval ?? 10);
             setAutoCloseInterval(updatedSetting.value?.autoCloseInterval ?? 60);
+            
+            if (updatedSetting.value?.windowMinutes !== undefined) {
+              setStatusThresholds(prev => ({
+                ...prev,
+                windowMinutes: updatedSetting.value.windowMinutes
+              }));
+            }
             toast.info('Configurações de alerta atualizadas!');
           }
           if (updatedSetting.key === 'ping_config') {
@@ -1204,7 +1229,7 @@ export default function HomePage() {
                   <span>{resolvedAlert.title}</span>
                 </DialogTitle>
                 <DialogDescription className="text-zinc-500 text-[11px] pt-1">
-                  Publicado em {new Date(resolvedAlert.created_at).toLocaleString('pt-BR')}
+                  Publicado em {new Date(parseUTCDate(resolvedAlert.created_at)).toLocaleString('pt-BR')}
                 </DialogDescription>
               </DialogHeader>
 
